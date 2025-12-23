@@ -1,0 +1,108 @@
+version: '3'
+
+set: [errexit, pipefail]
+
+vars:
+  REPOSITORY_NAME: '{{.REPOSITORY_NAME | default "Helm"}}'
+  GITHUB_USER: "Mathod95"
+  REPOSITORY_URL: "git@github.com:{{ .GITHUB_USER }}/{{ .REPOSITORY_NAME }}.git"
+  BRANCH_NAME: "main"
+
+###
+
+tasks:
+  default:
+    desc: "Initialize project, create GitHub repo, and push code."
+    summary: "Setup project and GitHub repo."
+    aliases: [setup, init]
+    output:
+      group:
+        begin: '🚀 ═══════════════════════════════════════════════════════════════'
+        end: '✅ ═══════════════════════════════════════════════════════════════'
+    cmds:
+      - task: github:main
+
+  github:main:
+    desc: "Setup project on GitHub."
+    summary: "Run all GitHub setup steps."
+    cmds:
+      - task github:localDirectory
+      - task github:readme
+      - task github:init  
+      - task github:add
+      - task github:commit
+      - task github:repository
+      - task github:push
+
+  github:localDirectory:
+    desc: "Create project directory."
+    summary: "Make directory in ~/github."
+    silent: true
+    cmds:
+      - mkdir -p ~/github/{{ .REPOSITORY_NAME }}
+      - cmd: echo "✅ Directory created in ~/github/{{ .REPOSITORY_NAME }}."
+        silent: true
+
+  github:readme:
+    desc: "Create README.md."
+    summary: "Generate README with project name."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      - cmd: echo "# {{ .REPOSITORY_NAME }}" > README.md
+      - cmd: echo "✅ README.md created."
+        silent: true
+
+  github:init:
+    desc: "Initialize Git repository."
+    summary: "Setup local Git repo."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      #- git init --initial-branch=main
+      - git init --initial-branch=main > /dev/null 2>&1
+      - cmd: echo "✅ Git initialized."
+        silent: true
+
+  github:add:
+    desc: "Add README.md to Git."
+    summary: "Stage README.md for commit."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      - git add README.md
+      - cmd: echo "✅ README.md added to Git."
+        silent: true
+
+  github:commit:
+    desc: "Commit README.md."
+    summary: "Initial commit with README.md."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      #- git commit -m "Premier commit"
+      - git commit -m "Premier commit" > /dev/null 2>&1
+      - cmd: echo "✅ Initial commit done."
+        silent: true
+
+  github:repository:
+    desc: "Create GitHub {{ .REPOSITORY_NAME }} repository."
+    summary: "Create remote repo on GitHub."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      #- gh repo create {{ .GITHUB_USER }}/{{ .REPOSITORY_NAME }} --public --source=. --remote=origin
+      - gh repo create {{ .GITHUB_USER }}/{{ .REPOSITORY_NAME }} --public --source=. --remote=origin > /dev/null 2>&1
+      - cmd: echo "✅ GitHub {{ .REPOSITORY_NAME }} repository created and linked."
+        silent: true
+
+  github:push:
+    desc: "Push code to GitHub."
+    summary: "Push local commits to remote GitHub repo."
+    dir: "~/github/{{ .REPOSITORY_NAME }}"
+    silent: true
+    cmds:
+      #- git push -u origin {{ .BRANCH_NAME }}
+      - git push -u origin {{ .BRANCH_NAME }} > /dev/null 2>&1
+      - cmd: echo "✅ Code pushed to {{ .REPOSITORY_NAME }} repository."
+        silent: true
