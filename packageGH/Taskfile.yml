@@ -1,0 +1,49 @@
+version: '3'
+
+set: [errexit, pipefail]
+
+vars:
+  gh_cli_installed: "{{ if eq (shell 'which gh') '' }}false{{ else }}true{{ end }}"
+
+###
+
+tasks:
+  # Installer Homebrew (si ce n'est pas déjà fait)
+  install-brew:
+    cmds:
+      - |
+        if ! command -v brew &> /dev/null; then
+          echo "Homebrew n'est pas installé. Installation..."
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        else
+          echo "Homebrew est déjà installé."
+        fi
+    desc: "Installer Homebrew sur Debian."
+
+  # Installer GitHub CLI avec Homebrew
+  install-gh:
+    cmds:
+      - |
+        if command -v brew &> /dev/null; then
+          echo "Installation de GitHub CLI via Homebrew..."
+          brew install gh
+        else
+          echo "Homebrew n'est pas installé, impossible d'installer GitHub CLI."
+        fi
+    desc: "Installer GitHub CLI (gh) via Homebrew."
+
+  # Configurer GitHub CLI avec SSH
+  configure-gh:
+    cmds:
+      - |
+        gh auth login --with-token <YOUR_GITHUB_TOKEN>
+        gh auth status
+    desc: "Configurer GitHub CLI avec l'authentification SSH."
+
+  # Vérifier si GitHub CLI est authentifié
+  check-gh-auth:
+    cmds:
+      - gh auth status
+    silent: true
+    # Cette tâche échouera si gh n'est pas authentifié
+    desc: "Vérifier si GitHub CLI est correctement authentifié."
