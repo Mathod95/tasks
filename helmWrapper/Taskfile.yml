@@ -1,0 +1,161 @@
+# https://taskfile.dev
+
+version: '3'
+
+set: [errexit, pipefail]
+
+vars:
+  HELM_REPOSITORY_NAME: '{{.HELM_REPOSITORY_NAME | default "stakater"}}'
+  HELM_REPOSITORY_URL: '{{.HELM_REPOSITORY_URL | default "https://stakater.github.io/stakater-charts"}}'
+  HELM_REPOSITORY_APP: '{{.HELM_REPOSITORY_APP | default "reloader"}}'
+
+###
+
+tasks:
+  default:
+    desc: "Create helm wrapper"
+    cmds:
+      - task: helmWrapper:main
+
+  helmWrapper:all:
+    desc: "do all chart"
+    summary: "do all chart"
+    cmds:
+      - HELM_REPOSITORY_NAME="kyverno" HELM_REPOSITORY_URL="https://kyverno.github.io/kyverno/" HELM_REPOSITORY_APP="kyverno" task
+      - HELM_REPOSITORY_NAME="argo" HELM_REPOSITORY_URL="https://argoproj.github.io/argo-helm" HELM_REPOSITORY_APP="argo-cd" task
+      - HELM_REPOSITORY_NAME="crossplane-stable" HELM_REPOSITORY_URL="https://charts.crossplane.io/stable" HELM_REPOSITORY_APP="crossplane" task
+      - HELM_REPOSITORY_NAME="stakater" HELM_REPOSITORY_URL="https://stakater.github.io/stakater-charts" HELM_REPOSITORY_APP="reloader" task
+      - HELM_REPOSITORY_NAME="prometheus-community" HELM_REPOSITORY_URL="https://prometheus-community.github.io/helm-charts" HELM_REPOSITORY_APP="prometheus" task
+
+
+  helmWrapper:main:
+    desc: "Run the full process (version check, update, commit, push)"
+    summary: "Runs the full process including version check, updating Chart.yaml, and committing the changes."
+    aliases: [setup, init]
+    cmds:
+      - task: required:check
+      - task: helm:repositories:add
+      - task: helm:repositories:update
+      - task: copy:templateDirectory
+      - task: update-chart
+
+  required:check:
+    cmds:
+      - "command -v helm || { echo 'helm could not be found. Please install helm.'; exit 1; }"
+      - "command -v yq || { echo 'yq could not be found. Please install yq.'; exit 1; }"
+      - "command -v git || { echo 'git could not be found. Please install git.'; exit 1; }"
+
+  helm:repositories:add:
+    desc: "Add Helm repositories"
+    summary: "Adds Helm repositories defined in the HELM_REPOSITORY_NAME and HELM_REPOSITORY_URL variables"
+    preconditions:
+      - sh: command -v helm >/dev/null 2>&1
+        msg: "❌ Helm n'est pas installé. Exécutez 'task brew:main' d'abord."
+    requires:
+      vars: [HELM_REPOSITORY_NAME, HELM_REPOSITORY_URL]
+    cmds:
+      - 'helm repo add {{.HELM_REPOSITORY_NAME}} {{.HELM_REPOSITORY_URL}}'
+
+  helm:repositories:update:
+    desc: "Update Helm repositories"
+    summary: ""
+    cmds:
+      - helm repo update
+      - cmd: echo "✅ Tous les repositories sont mis à jour."
+        silent: true
+
+  #helm:create:wrapperDirectory:
+  #  desc: Crée un répertoire basé sur HELM_REPOSITORY_APP
+  #  cmds:
+  #    - mkdir -p "${HELM_REPOSITORY_APP}"
+  #    - cmd: echo "✅ Répertoire créé avec succès."
+  #      silent: true
+
+  copy:templateDirectory:
+    desc: Copie le répertoire "config" dans un répertoire basé sur HELM_REPOSITORY_APP
+    cmds:
+      - mkdir -p {{.HELM_REPOSITORY_APP}}  # Crée le répertoire de destination
+      - cp -r config/* {{.HELM_REPOSITORY_APP}}/  # Copie tout le contenu de "config"
+      - cmd: echo "✅ Le répertoire 'config' a été copié dans {{.HELM_REPOSITORY_APP}}"
+        silent: true
+
+  update-chart:
+    desc: "Met à jour le Chart.yaml avec les informations du chart Helm"
+    summary: "Récupère les informations du chart Helm et met à jour le Chart.yaml en conséquence."
+    requires:
+      vars: [HELM_REPOSITORY_NAME, HELM_REPOSITORY_APP, HELM_REPOSITORY_URL]
+    dir: "{{.HELM_REPOSITORY_APP}}"
+    cmds:
+      - |
+        HELM_CHART="$(helm show chart {{.HELM_REPOSITORY_NAME}}/{{.HELM_REPOSITORY_APP}})"
+
+        export HELM_CHART_VERSION="$(echo "$HELM_CHART" | yq '.version')"
+        export HELM_APP_VERSION="$(echo "$HELM_CHART" | yq '.appVersion')"
+        export HELM_SOURCES="$(echo "$HELM_CHART" | yq '.sources[0]')"
+
+        yq -i '
+          .name = "{{.HELM_REPOSITORY_APP}}-wrapper" |
+          .description = "Wrapper for {{.HELM_REPOSITORY_NAME}} {{.HELM_REPOSITORY_APP}}" |
+          .type = "application" |
+          .version = "1.0.0" |
+          .appVersion = strenv(HELM_APP_VERSION) |
+          .maintainers = [{"name":"Mathod"}] |
+          .dependencies = [{
+            "name":"{{.HELM_REPOSITORY_APP}}",
+            "version": strenv(HELM_CHART_VERSION),
+            "repository":"{{.HELM_REPOSITORY_URL}}"
+          }] |
+          .sources = [strenv(HELM_SOURCES)]
+        ' Chart.yaml
+
+#
+#  get_current_version:
+#    cmds:
+#      - "current_version=$(yq eval '.version' cnpg/Chart.yaml)"
+#
+#  search_existing_versions:
+#    cmds:
+#      - "echo 'No new version provided. Searching the repository for existing versions...'"
+#      - "printf '%-15s %-15s %s\\n' 'Version' 'App Version' 'Current'"
+#      - "helm search repo temp/$chart -l --output json | jq -r '.[] | \"\(.version) \(.app_version)\"' | awk -v cv=\"$current_version\" '{if (\$1 == cv) printf \"%-15s %-15s %s\\n\", \$1, \$2, \"*\"; else printf \"%-15s %-15s %s\\n\", \$1, \$2, \"\"}'"
+#      - "task remove_temp_repo"
+#      - "exit 0"
+#
+#  verify_version_exists:
+#    cmds:
+#      - "search_results=$(helm search repo temp/$chart --version \"$new_version\" --output json)"
+#      - "if [ \"\$(echo $search_results | jq -r '.[0].app_version')\" == 'null' ]; then"
+#      - "    echo 'Version does not exist'"
+#      - "    task remove_temp_repo"
+#      - "    exit 1"
+#      - "fi"
+#      - "app_version=$(echo $search_results | jq -r '.[0].app_version')"
+#      - "echo 'Version exists, app_version is $app_version'"
+#
+#  update_chart_yaml:
+#    cmds:
+#      - "yq eval -i \".version = \\\"$new_version\\\"\" cnpg/Chart.yaml"
+#      - "yq eval -i '(.dependencies[0].version) |= \"'$new_version'\"' cnpg/Chart.yaml"
+#      - "yq eval -i \".appVersion = \\\"$app_version\\\"\" cnpg/Chart.yaml"
+#      - "task remove_temp_repo"
+#      - "echo 'Updated cnpg/Chart.yaml with version $new_version and appVersion $app_version'"
+#
+#  update_dependencies:
+#    cmds:
+#      - "helm dependency update cnpg > /dev/null"
+#
+#  check_tag_exists:
+#    cmds:
+#      - "if git rev-parse \"$new_version\" >/dev/null 2>&1; then"
+#      - "    echo 'Tag already exists, why do you want to add it again? Exiting...'"
+#      - "    exit 1"
+#      - "fi"
+#
+#  commit_and_push_changes:
+#    cmds:
+#      - "git add ."
+#      - "git commit -m 'Changed version $new_version and appVersion $app_version'"
+#      - "git tag $new_version"
+#      - "git push origin $new_version --tags"
+
+
