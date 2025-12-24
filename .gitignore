@@ -1,5 +1,12 @@
+# helmWrapper
 helmWrapper/argo-cd
 helmWrapper/crossplane
 helmWrapper/kyverno
 helmWrapper/prometheus
 helmWrapper/reloader
+
+# bootstrap
+bootstrap/secrets/*.yaml
+bootstrap/secrets/*.txt
+!bootstrap/secrets/*.sops.yaml
+!bootstrap/secrets/*.age

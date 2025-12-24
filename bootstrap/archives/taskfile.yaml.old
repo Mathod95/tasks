@@ -1,0 +1,848 @@
+version: '3'
+
+silent: true
+
+vars:
+  BREW: /home/linuxbrew/.linuxbrew/bin/brew
+  SOPS: /home/linuxbrew/.linuxbrew/bin/sops
+  YQ: /home/linuxbrew/.linuxbrew/bin/yq
+
+tasks:
+  # ==========================================
+  # Point d'entrée principal
+  # ==========================================
+  
+  default:
+    desc: "Bootstrap complet de l'environnement (auto-lock des secrets)"
+    cmds:
+      - task: bootstrap
+
+  bootstrap:
+    desc: "Installation et configuration complète"
+    aliases: [setup, init]
+    cmds:
+      - task: age:deploy
+      - task: sudo:check
+      - task: secrets:unlock
+      - defer: task secrets:lock
+      - task: brew:install
+      - task: packages:install
+      - task: ssh:setup
+      - task: git:config
+      - task: git:known-hosts
+      - task: git:clone
+      - task: vscode:setup
+      - task: wsl:configure
+      - task: zsh:setup
+      - task: zellij:setup
+      - echo ""
+      - echo "✅ Bootstrap terminé !"
+      - echo "🔒 Secrets automatiquement verrouillés"
+
+  # ==========================================
+  # Gestion de la clé age
+  # ==========================================
+
+  age:deploy:
+    desc: "📦 Déploie la clé age chiffrée depuis le repo"
+    cmds:
+      - |
+        if [ ! -f secrets/age-key.txt.age ]; then
+          echo "❌ Fichier secrets/age-key.txt.age introuvable !"
+          echo "💡 Assure-toi que le fichier est bien dans le repo"
+          exit 1
+        fi
+      - mkdir -p secrets
+      - |
+        if [ -f secrets/age-key.txt.age ]; then
+          echo "✅ Clé age chiffrée trouvée dans le repo"
+        else
+          echo "❌ Clé age chiffrée introuvable"
+          exit 1
+        fi
+    status:
+      - test -f secrets/age-key.txt.age
+
+  # ==========================================
+  # Gestion des secrets avec age + passphrase
+  # ==========================================
+
+  secrets:unlock:
+    desc: "🔓 Déchiffre la clé age avec ta passphrase"
+    cmds:
+      - |
+        if [ ! -f ~/.config/sops/age/keys.txt ]; then
+          echo "🔑 Déchiffrement de la clé age..."
+          mkdir -p ~/.config/sops/age
+          age --decrypt secrets/age-key.txt.age > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+          echo "✅ Clé age déchiffrée"
+        else
+          echo "⏭️  Clé age déjà déchiffrée"
+        fi
+    status:
+      - test -f ~/.config/sops/age/keys.txt
+
+  secrets:lock:
+    desc: "🔒 Supprime la clé age déchiffrée (sécurité)"
+    cmds:
+      - |
+        if [ -f ~/.config/sops/age/keys.txt ]; then
+          rm -f ~/.config/sops/age/keys.txt
+          echo "🔒 Secrets verrouillés"
+        else
+          echo "⏭️  Secrets déjà verrouillés"
+        fi
+
+  secrets:status:
+    desc: "📊 Vérifie si les secrets sont déverrouillés"
+    cmds:
+      - |
+        if [ -f ~/.config/sops/age/keys.txt ]; then
+          echo "🔓 Secrets déverrouillés"
+          echo "💡 Utilise 'task secrets:lock' pour verrouiller"
+        else
+          echo "🔒 Secrets verrouillés"
+          echo "💡 Utilise 'task secrets:unlock' pour déverrouiller"
+        fi
+
+  work:
+    desc: "🔓 Déverrouille les secrets pour travailler (sans auto-lock)"
+    cmds:
+      - task: secrets:unlock
+      - echo ""
+      - echo "✅ Secrets déverrouillés pour travailler"
+      - echo "💡 Tu peux maintenant utiliser SOPS :"
+      - echo "   - sops secrets/ssh-keys.sops.yaml"
+      - echo "   - sops --decrypt secrets/ssh-keys.sops.yaml"
+      - echo ""
+      - echo "⚠️  N'oublie pas de verrouiller quand tu as fini :"
+      - echo "   - task secrets:lock"
+
+  # ==========================================
+  # SSH - Déchiffrement et configuration
+  # ==========================================
+
+  ssh:setup:
+    desc: "🔑 Configure SSH en déchiffrant les clés"
+    cmds:
+      - task: ssh:decrypt
+      - task: ssh:configure
+      - echo "✅ SSH configuré"
+
+  ssh:decrypt:
+    desc: "Déchiffre les clés SSH depuis SOPS"
+    internal: true
+    preconditions:
+      - sh: test -f ~/.config/sops/age/keys.txt
+        msg: "❌ Clé age non déchiffrée ! Lance 'task secrets:unlock' d'abord"
+    cmds:
+      - mkdir -p ~/.ssh
+      - chmod 700 ~/.ssh
+      - |
+        # GitLab
+        echo "🔓 Déchiffrement clé GitLab..."
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} '.ssh.gitlab.private_key' > ~/.ssh/gitlab
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} -r '.ssh.gitlab.public_key' > ~/.ssh/gitlab.pub
+        chmod 600 ~/.ssh/gitlab
+        chmod 644 ~/.ssh/gitlab.pub
+        echo "✅ Clé GitLab restaurée"
+      - |
+        # GitHub
+        echo "🔓 Déchiffrement clé GitHub..."
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} '.ssh.github.private_key' > ~/.ssh/github
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} -r '.ssh.github.public_key' > ~/.ssh/github.pub
+        chmod 600 ~/.ssh/github
+        chmod 644 ~/.ssh/github.pub
+        echo "✅ Clé GitHub restaurée"
+      - |
+        # Seedbox
+        echo "🔓 Déchiffrement clé Seedbox..."
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} '.ssh.seedbox.private_key' > ~/.ssh/seedbox
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} -r '.ssh.seedbox.public_key' > ~/.ssh/seedbox.pub
+        chmod 600 ~/.ssh/seedbox
+        chmod 644 ~/.ssh/seedbox.pub
+        echo "✅ Clé Seedbox restaurée"
+      - |
+        # SSH config
+        echo "🔓 Déchiffrement SSH config..."
+        {{.SOPS}} --decrypt secrets/ssh-keys.sops.yaml | {{.YQ}} '.ssh_config' > ~/.ssh/config
+        chmod 600 ~/.ssh/config
+        echo "✅ SSH config restauré"
+
+  ssh:configure:
+    desc: "Configure l'agent SSH"
+    internal: true
+    cmds:
+      - |
+        # Démarrer l'agent SSH si pas déjà lancé
+        if [ -z "$SSH_AUTH_SOCK" ]; then
+          eval $(ssh-agent -s)
+        fi
+        echo "✅ Agent SSH configuré"
+
+  ssh:test:
+    desc: "🧪 Teste les connexions SSH"
+    cmds:
+      - echo "🧪 Test de connexion GitLab..."
+      - ssh -T git@gitlab.com || true
+      - echo ""
+      - echo "🧪 Test de connexion Seedbox..."
+      - ssh -o ConnectTimeout=5 seedbox echo "✅ Connexion seedbox OK" || echo "⚠️  Connexion seedbox échouée"
+
+  # ==========================================
+  # Git - Configuration et repositories
+  # ==========================================
+
+  git:config:
+    desc: "Configure Git global (user.name et user.email)"
+    internal: true
+    cmds:
+      - git config --global user.email "felix.mathias95@gmail.com"
+      - git config --global user.name "Mathod"
+      - echo "✅ Configuration Git appliquée"
+    status:
+      - test "$(git config --global user.email)" = "felix.mathias95@gmail.com"
+      - test "$(git config --global user.name)" = "Mathod"
+
+  git:known-hosts:
+    desc: "Ajoute GitHub et GitLab aux known_hosts"
+    internal: true
+    cmds:
+      - |
+        echo "🔑 Ajout des serveurs Git aux known_hosts..."
+        mkdir -p ~/.ssh
+        ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+        ssh-keyscan gitlab.com >> ~/.ssh/known_hosts 2>/dev/null
+        echo "✅ Known hosts configurés"
+
+  git:clone:
+    desc: "Clone les dépôts GitHub (si pas déjà présents)"
+    internal: true
+    vars:
+      REPOS:
+        - git@github.com:Mathod95/wsl.git
+        - git@github.com:Mathod95/task.git
+        - git@github.com:Mathod95/docs.git
+    cmds:
+      - mkdir -p ~/github
+      - |
+        repos=({{.REPOS | join " "}})
+        for repo in "${repos[@]}"; do
+          repo_name=$(basename "$repo" .git)
+          if [ -d "$HOME/github/$repo_name" ]; then
+            echo "⏭️  $repo_name déjà cloné"
+          else
+            echo "📥 Clonage de $repo_name..."
+            git clone "$repo" "$HOME/github/$repo_name"
+          fi
+        done
+      - echo "✅ Dépôts GitHub synchronisés"
+
+  git:pull:
+    desc: "🔄 Met à jour les dépôts GitHub locaux"
+    vars:
+      REPOS:
+        - wsl
+        - task
+        - docs
+    cmds:
+      - |
+        echo "🔄 Mise à jour des dépôts GitHub..."
+        echo "────────────────────────────────────────────"
+        
+        repos=({{.REPOS | join " "}})
+        for repo_name in "${repos[@]}"; do
+          if [ -d "$HOME/github/$repo_name" ]; then
+            cd "$HOME/github/$repo_name"
+            
+            # Vérifier s'il y a des modifications locales
+            if git diff-index --quiet HEAD --; then
+              echo "📥 Pull $repo_name..."
+              git pull
+            else
+              echo "⚠️  $repo_name a des modifications locales, skip"
+            fi
+          else
+            echo "❌ $repo_name n'existe pas, lance 'task git:clone' d'abord"
+          fi
+        done
+        
+        echo "────────────────────────────────────────────"
+        echo "✅ Mise à jour terminée"
+
+  # ==========================================
+  # VS Code - Configuration et extensions
+  # ==========================================
+
+  vscode:setup:
+    desc: "🎨 Configure VS Code (symlinks + extensions)"
+    cmds:
+      - task: vscode:code-symlink
+      - task: vscode:symlinks
+      - task: vscode:extensions
+
+  vscode:symlinks:
+    desc: "Crée les symlinks helm/kubectl pour VS Code Kubernetes"
+    internal: true
+    cmds:
+      - mkdir -p ~/.local/state/vs-kubernetes/tools/helm/linux-amd64
+      - mkdir -p ~/.local/state/vs-kubernetes/tools/kubectl
+      - |
+        echo "🔗 Création symlinks helm/kubectl..."
+        ln -sf /home/linuxbrew/.linuxbrew/bin/helm ~/.local/state/vs-kubernetes/tools/helm/linux-amd64/helm
+        ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl ~/.local/state/vs-kubernetes/tools/kubectl/kubectl
+        echo "✅ Symlinks créés"
+
+  vscode:extensions:
+    desc: "Installe les extensions VS Code"
+    internal: true
+    vars:
+      EXTENSIONS:
+        - ms-kubernetes-tools.vscode-kubernetes-tools
+        - ms-kubernetes-tools.kind-vscode
+        - ms-azuretools.vscode-docker
+        - task.vscode-task
+        - upboundio.upbound
+        - redhat.vscode-yaml
+    cmds:
+      - |
+        echo "📦 Installation des extensions VS Code..."
+        
+        # Initialiser VS Code Server
+        echo "🔧 Initialisation VS Code Server..."
+        code --version > /dev/null 2>&1 || true
+        sleep 2
+        
+        # Installer les extensions
+        extensions=({{.EXTENSIONS | join " "}})
+        for ext in "${extensions[@]}"; do
+          echo "  📥 Installation $ext..."
+          code --install-extension "$ext" --force || echo "  ⚠️  Échec $ext"
+        done
+        
+        echo "✅ Extensions installées"
+
+  vscode:code-symlink:
+    desc: "Crée le symlink global pour la commande code"
+    internal: true
+    cmds:
+      - |
+        VSCODE_PATH="/mnt/c/Users/$USER/AppData/Local/Programs/Microsoft VS Code/bin/code"
+        
+        if [ -f "$VSCODE_PATH" ]; then
+          echo "🔗 Création symlink global 'code'..."
+          sudo ln -sf "$VSCODE_PATH" /usr/local/bin/code
+          echo "✅ Commande 'code' disponible globalement"
+        else
+          echo "⚠️  VS Code non trouvé à $VSCODE_PATH"
+          echo "💡 VS Code doit être installé sur Windows"
+        fi
+
+  # ==========================================
+  # WSL - Configuration
+  # ==========================================
+
+  wsl:configure:
+    desc: "⚙️ Configure WSL (systemd)"
+    cmds:
+      - |
+        echo "⚙️ Configuration de WSL..."
+        
+        # Vérifier si systemd est déjà activé
+        if grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null && grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null; then
+          echo "⏭️  systemd déjà activé dans /etc/wsl.conf"
+        else
+          echo "📝 Activation de systemd dans /etc/wsl.conf..."
+          
+          # Créer ou mettre à jour /etc/wsl.conf
+          printf "\n[boot]\nsystemd = true\n" | sudo tee -a /etc/wsl.conf > /dev/null
+          
+          echo "✅ systemd activé"
+          echo ""
+          echo "⚠️  IMPORTANT : Redémarrer WSL pour appliquer les changements !"
+          echo "   Windows PowerShell : wsl --shutdown"
+          echo "   Puis relancer WSL"
+        fi
+
+  # ==========================================
+  # ZSH - Configuration
+  # ==========================================
+
+  zsh:setup:
+    desc: "🐚 Configure ZSH"
+    cmds:
+      - task: zsh:histfile
+      - task: zsh:add-to-shells
+      - task: zsh:config
+      - task: zsh:abbr
+      - task: zsh:plugins
+      - task: zsh:set-default
+
+  zsh:histfile:
+    desc: "Crée le fichier d'historique ZSH"
+    internal: true
+    cmds:
+      - |
+        if [ ! -f ~/.histfile ]; then
+          echo "📝 Création de ~/.histfile..."
+          touch ~/.histfile
+          chmod 600 ~/.histfile
+          echo "✅ Fichier d'historique ZSH créé"
+        else
+          echo "⏭️  ~/.histfile existe déjà"
+        fi
+
+  zsh:add-to-shells:
+    desc: "Ajoute ZSH à la liste des shells valides"
+    internal: true
+    cmds:
+      - |
+        ZSH_PATH="/home/linuxbrew/.linuxbrew/bin/zsh"
+        
+        if grep -q "^$ZSH_PATH$" /etc/shells 2>/dev/null; then
+          echo "⏭️  ZSH déjà dans /etc/shells"
+        else
+          echo "📝 Ajout de ZSH à /etc/shells..."
+          echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null
+          echo "✅ ZSH ajouté à /etc/shells"
+        fi
+
+  zsh:config:
+    desc: "Copie la configuration ZSH"
+    internal: true
+    cmds:
+      - |
+        echo "📝 Copie de la configuration ZSH..."
+        
+        if [ -f configs/.zshrc ]; then
+          cp configs/.zshrc ~/.zshrc
+          echo "✅ .zshrc copié"
+        else
+          echo "⚠️  configs/.zshrc introuvable"
+        fi
+        
+        if [ -f configs/.p10k.zsh ]; then
+          cp configs/.p10k.zsh ~/.p10k.zsh
+          echo "✅ .p10k.zsh copié"
+        fi
+
+  zsh:abbr:
+    desc: "Copie les abbreviations ZSH"
+    internal: true
+    cmds:
+      - |
+        if [ -f configs/user-abbreviations ]; then
+          echo "📝 Copie des abbreviations..."
+          mkdir -p ~/.config/zsh-abbr
+          cp configs/user-abbreviations ~/.config/zsh-abbr/user-abbreviations
+          chmod 600 ~/.config/zsh-abbr/user-abbreviations
+          echo "✅ Abbreviations copiées"
+        else
+          echo "⏭️  configs/user-abbreviations introuvable (optionnel)"
+        fi
+
+  zsh:plugins:
+    desc: "Installe les plugins Zinit"
+    internal: true
+    cmds:
+      - |
+        echo "📦 Installation des plugins Zinit..."
+        echo "⏳ Cela peut prendre 10-30 secondes..."
+        echo ""
+        
+        # Lancer ZSH en mode non-interactif pour que Zinit installe les plugins
+        /home/linuxbrew/.linuxbrew/bin/zsh -c "source ~/.zshrc && exit" 2>&1 | grep -E "(Cloning|Compiling|Downloaded)" || true
+        
+        echo ""
+        echo "✅ Plugins Zinit installés"
+
+  zsh:set-default:
+    desc: "Définit ZSH comme shell par défaut"
+    internal: true
+    cmds:
+      - |
+        ZSH_PATH="/home/linuxbrew/.linuxbrew/bin/zsh"
+        current_shell=$(getent passwd $USER | cut -d: -f7)
+        
+        if [ "$current_shell" = "$ZSH_PATH" ]; then
+          echo "⏭️  ZSH déjà shell par défaut"
+        else
+          echo "🐚 Changement du shell par défaut vers ZSH..."
+          sudo chsh -s "$ZSH_PATH" "$USER"
+          echo "✅ ZSH défini comme shell par défaut"
+          echo ""
+          echo "⚠️  IMPORTANT : Redémarrer le terminal pour appliquer !"
+        fi
+
+  # ==========================================
+  # Zellij - Configuration
+  # ==========================================
+
+  zellij:setup:
+    desc: "🖥️ Configure Zellij"
+    cmds:
+      - task: zellij:config
+
+  zellij:config:
+    desc: "Copie la configuration Zellij"
+    internal: true
+    cmds:
+      - |
+        echo "📝 Copie de la configuration Zellij..."
+        
+        # Créer les dossiers
+        mkdir -p ~/.config/zellij/themes
+        
+        # Copier config.kdl
+        if [ -f configs/config.kdl ]; then
+          cp configs/config.kdl ~/.config/zellij/config.kdl
+          chmod 644 ~/.config/zellij/config.kdl
+          echo "✅ config.kdl copié"
+        else
+          echo "⚠️  configs/config.kdl introuvable"
+        fi
+        
+        # Copier dracula.kdl
+        if [ -f configs/dracula.kdl ]; then
+          cp configs/dracula.kdl ~/.config/zellij/themes/dracula.kdl
+          chmod 644 ~/.config/zellij/themes/dracula.kdl
+          echo "✅ dracula.kdl copié"
+        else
+          echo "⏭️  configs/dracula.kdl introuvable (optionnel)"
+        fi
+
+  # ==========================================
+  # Sudo - Demande le mot de passe une fois
+  # ==========================================
+
+  sudo:check:
+    desc: "Demande le mot de passe sudo (une seule fois)"
+    internal: true
+    cmds:
+      - sudo -v
+      - echo "✅ Accès sudo accordé"
+
+  # ==========================================
+  # Brew - Gestion Homebrew
+  # ==========================================
+
+  brew:install:
+    desc: "📦 Installe Homebrew si nécessaire"
+    cmds:
+      - task: brew:install:deps
+      - task: brew:install:binary
+      - task: brew:configure:path
+      - task: brew:analytics:off
+    status:
+      - command -v brew
+
+  brew:install:deps:
+    desc: "Installe les dépendances Homebrew"
+    internal: true
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y build-essential procps curl file git
+      - echo "✅ Dépendances Homebrew installées"
+    status:
+      - dpkg -s build-essential
+
+  brew:install:binary:
+    desc: "Installe Homebrew"
+    internal: true
+    run: once
+    cmds:
+      - /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      - echo "✅ Homebrew installé"
+    status:
+      - test -d /home/linuxbrew/.linuxbrew
+
+  brew:configure:path:
+    desc: "Configure Homebrew dans le PATH"
+    internal: true
+    cmds:
+      - |
+        if ! grep -q "linuxbrew" ~/.bashrc; then
+          echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+          echo "✅ Homebrew ajouté à ~/.bashrc"
+        else
+          echo "⏭️  Homebrew déjà configuré dans ~/.bashrc"
+        fi
+    status:
+      - grep -q "linuxbrew" ~/.bashrc
+
+  brew:analytics:off:
+    desc: "Désactive la télémétrie Homebrew"
+    internal: true
+    run: once
+    cmds:
+      - '{{.BREW}} analytics off'
+      - echo "✅ Télémétrie Homebrew désactivée"
+
+  brew:update:
+    desc: "🔄 Met à jour les dépôts Homebrew"
+    cmds:
+      - '{{.BREW}} update'
+      - echo "✅ Dépôts Homebrew mis à jour"
+
+  brew:upgrade:
+    desc: "⬆️  Upgrade tous les packages Homebrew"
+    cmds:
+      - '{{.BREW}} upgrade'
+      - echo "✅ Packages Homebrew upgradés"
+
+  brew:list:
+    desc: "📋 Liste tous les packages installés"
+    cmds:
+      - '{{.BREW}} list --versions'
+
+  brew:list:leaves:
+    desc: "📋 Liste les packages installés manuellement"
+    cmds:
+      - '{{.BREW}} leaves --versions'
+
+  brew:list:pretty:
+    desc: "📋 Liste les packages avec affichage stylé"
+    cmds:
+      - |
+        echo "📦 Packages Homebrew installés :"
+        echo "─────────────────────────────────────────"
+        {{.BREW}} leaves | while read package; do
+          version=$({{.BREW}} list --versions "$package" | awk '{print $2}')
+          case $package in
+            age)       emoji="🔐" ;;
+            argocd)    emoji="🚀" ;;
+            bat)       emoji="🦇" ;;
+            eza)       emoji="📂" ;;
+            git)       emoji="🌿" ;;
+            helm)      emoji="⎈" ;;
+            kind)      emoji="🐳" ;;
+            kubectl)   emoji="☸️" ;;
+            kubecolor) emoji="🎨" ;;
+            kubectx)   emoji="🔄" ;;
+            sops)      emoji="🔒" ;;
+            vim)       emoji="✏️" ;;
+            yq)        emoji="📝" ;;
+            zsh)       emoji="🐚" ;;
+            zellij)    emoji="🖥️" ;;
+            *)         emoji="📦" ;;
+          esac
+          printf "%s %-15s %s\n" "$emoji" "$package" "$version"
+        done
+
+  # ==========================================
+  # Packages - Installation des outils
+  # ==========================================
+
+  packages:install:
+    desc: "Installe les packages essentiels"
+    internal: true
+    vars:
+      PACKAGES:
+        - age
+        # - ansible
+        - argocd
+        - argocd-autopilot
+        # - asciinema
+        # - awscli
+        - bat
+        - btop
+        # - cilium-cli
+        # - cloud-provider-kind
+        # - crossplane
+        - curl
+        # - docker
+        - eza
+        - fastfetch
+        - fd
+        - fzf
+        - git
+        - helm
+        # - k9s
+        # - keychain
+        - kind
+        # - kube-linter
+        # - kube-score
+        - kubecolor
+        - kubectl
+        # - kubescape
+        - kubectx
+        # - krew
+        - kustomize
+        - kyverno
+        # - neovim
+        # - opentofu
+        - ripgrep
+        - sops
+        - systemd
+        # - velero
+        - vim
+        - wget
+        - yq
+        - zellij
+        - zinit
+        - zsh
+    cmds:
+      - echo "📦 Installation des packages..."
+      - |
+        packages="{{.PACKAGES | join " "}}"
+        {{.BREW}} install $packages
+      - echo "✅ Packages installés"
+    status:
+      - |
+        packages="{{.PACKAGES | join " "}}"
+        for pkg in $packages; do
+          if ! {{.BREW}} list "$pkg" >/dev/null 2>&1; then
+            exit 1
+          fi
+        done
+        exit 0
+
+  # ==========================================
+  # Utilitaires
+  # ==========================================
+
+  versions:
+    desc: "📊 Affiche les versions de tous les packages"
+    cmds:
+      - |
+        echo "📦 Versions des packages :"
+        echo "────────────────────────────────────────────"
+        
+        # Définir les packages avec leurs emojis
+        declare -A packages=(
+          ["age"]="🔐"
+          ["ansible"]="🧪"
+          ["argocd"]="🚀"
+          ["argocd-autopilot"]="🤖"
+          ["asciinema"]="📹"
+          ["awscli"]="☁️"
+          ["bat"]="🦇"
+          ["btop"]="📊"
+          ["cilium-cli"]="🧬"
+          ["cloud-provider-kind"]="☁️"
+          ["crossplane"]="🛠️"
+          ["curl"]="🌊"
+          ["docker"]="🐳"
+          ["eza"]="📂"
+          ["fastfetch"]="⚡"
+          ["fd"]="🔍"
+          ["fzf"]="🔎"
+          ["git"]="🌿"
+          ["helm"]="⎈"
+          ["k9s"]="🖥️"
+          ["keychain"]="🔐"
+          ["kind"]="🐳"
+          ["kube-linter"]="🔍"
+          ["kube-score"]="📊"
+          ["kubecolor"]="🎨"
+          ["kubectl"]="☸️"
+          ["kubescape"]="🛡️"
+          ["kubectx"]="🔄"
+          ["krew"]="🧩"
+          ["kustomize"]="🔧"
+          ["kyverno"]="🛡️"
+          ["neovim"]="✨"
+          ["opentofu"]="🌍"
+          ["ripgrep"]="🔎"
+          ["sops"]="🔒"
+          ["systemd"]="⚙️"
+          ["velero"]="🛟"
+          ["vim"]="✏️"
+          ["wget"]="📥"
+          ["yq"]="📝"
+          ["zellij"]="🖥️"
+          ["zinit"]="⚡"
+          ["zsh"]="🐚"
+        )
+        
+        # Liste de tous les packages (dans l'ordre)
+        all_packages=(
+          age ansible argocd argocd-autopilot asciinema awscli
+          bat btop cilium-cli cloud-provider-kind crossplane curl
+          docker eza fastfetch fd fzf git helm k9s keychain kind
+          kube-linter kube-score kubecolor kubectl kubescape kubectx
+          krew kustomize kyverno neovim opentofu ripgrep sops
+          systemd velero vim wget yq zellij zinit zsh
+        )
+        
+        for pkg in "${all_packages[@]}"; do
+          emoji="${packages[$pkg]:-📦}"
+          version=$({{.BREW}} list --versions "$pkg" 2>/dev/null | awk '{print $2}')
+          
+          if [ -z "$version" ]; then
+            printf "%s %-20s : ❌ non installé\n" "$emoji" "$pkg"
+          else
+            printf "%s %-20s : %s\n" "$emoji" "$pkg" "$version"
+          fi
+        done
+        
+        echo "────────────────────────────────────────────"
+
+  clean:
+    desc: "🧹 Nettoie les fichiers temporaires"
+    cmds:
+      - task: secrets:lock
+      - echo "✅ Nettoyage terminé"
+
+  status:
+    desc: "📊 Affiche le statut de l'environnement"
+    cmds:
+      - echo "📊 Statut de l'environnement"
+      - echo "─────────────────────────────────────────"
+      - echo ""
+      - echo "🍺 Homebrew :"
+      - |
+        if command -v brew >/dev/null 2>&1; then
+          echo "  ✅ Installé ($({{.BREW}} --version | head -1))"
+        else
+          echo "  ❌ Non installé"
+        fi
+      - echo ""
+      - echo "🔐 Secrets :"
+      - |
+        if [ -f ~/.config/sops/age/keys.txt ]; then
+          echo "  🔓 Déverrouillés"
+        else
+          echo "  🔒 Verrouillés"
+        fi
+      - echo ""
+      - echo "🔑 SSH :"
+      - |
+        if [ -f ~/.ssh/gitlab ] && [ -f ~/.ssh/seedbox ]; then
+          echo "  ✅ Clés présentes (gitlab, seedbox)"
+        else
+          echo "  ⚠️  Clés manquantes"
+        fi
+      - echo ""
+      - echo "📦 Packages :"
+      - |
+        count=$({{.BREW}} list 2>/dev/null | wc -l)
+        echo "  📦 $count packages installés"
+
+  help:
+    desc: "❓ Affiche l'aide"
+    cmds:
+      - echo "🚀 Taskfile Bootstrap - Commandes disponibles"
+      - echo "═══════════════════════════════════════════════════════"
+      - echo ""
+      - echo "🎯 Principales :"
+      - echo "  task                    Bootstrap complet (auto-lock)"
+      - echo "  task work               Déverrouille pour travailler"
+      - echo "  task status             Affiche le statut"
+      - echo ""
+      - echo "🔐 Gestion des secrets :"
+      - echo "  task secrets:unlock     Déverrouille les secrets"
+      - echo "  task secrets:lock       Verrouille les secrets"
+      - echo "  task secrets:status     Statut des secrets"
+      - echo ""
+      - echo "🔑 SSH :"
+      - echo "  task ssh:setup          Configure SSH"
+      - echo "  task ssh:test           Teste les connexions"
+      - echo ""
+      - echo "🍺 Homebrew :"
+      - echo "  task brew:update        Met à jour les dépôts"
+      - echo "  task brew:upgrade       Upgrade les packages"
+      - echo "  task brew:list:pretty   Liste les packages"
+      - echo ""
+      - echo "Astuce - Lance task --list pour voir toutes les commandes"

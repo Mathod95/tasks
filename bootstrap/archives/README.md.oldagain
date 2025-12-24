@@ -1,0 +1,1330 @@
+```bash
+sudo apt update
+sudo apt install curl git age -y
+sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+task --version
+git clone https://github.com/Mathod95/task.git
+cd task
+task
+```
+
+# 🚀 Bootstrap WSL2 - Environnement de développement automatisé
+
+Bootstrap automatique d'un environnement de développement WSL2 (Debian) avec gestion sécurisée des secrets via **age + SOPS**.
+
+---
+
+## 📋 Table des matières
+
+- [Structure du projet](#structure-du-projet)
+- [Vue d'ensemble](#vue-densemble)
+- [Prérequis](#prérequis)
+- [Installation rapide](#installation-rapide)
+- [Architecture de sécurité](#architecture-de-sécurité)
+- [Setup initial (première fois)](#setup-initial-première-fois)
+- [Déploiement sur nouvelle machine](#déploiement-sur-nouvelle-machine)
+- [Utilisation quotidienne](#utilisation-quotidienne)
+- [Commandes disponibles](#commandes-disponibles)
+- [Gestion des secrets](#gestion-des-secrets)
+- [Dépannage](#dépannage)
+- [FAQ](#faq)
+
+---
+
+## 📁 Structure du projet
+
+```
+.
+├── README.md                    # Documentation complète
+├── taskfile.yaml                # Automatisation avec Task
+├── .sops.yaml                   # Configuration SOPS (clé publique age)
+├── .gitignore                   # Fichiers à exclure de Git
+├── configs/                     # 📝 Fichiers de configuration
+│   ├── .zshrc                   # Configuration ZSH complète
+│   ├── .p10k.zsh                # Configuration Powerlevel10k
+│   ├── user-abbreviations       # Abbreviations ZSH
+│   ├── config.kdl               # Configuration Zellij
+│   └── dracula.kdl              # Thème Dracula pour Zellij
+└── secrets/                     # 🔒 Secrets chiffrés
+    ├── age-key.txt.age          # Clé age chiffrée avec passphrase
+    └── ssh-keys.sops.yaml       # Clés SSH chiffrées avec SOPS
+```
+
+**✅ Tout peut être commité dans Git de manière sécurisée !**
+
+---
+
+## 🎯 Vue d'ensemble
+
+Ce projet automatise la configuration complète d'un environnement de développement WSL2 :
+
+**✨ Fonctionnalités :**
+- 🍺 Installation automatique de Homebrew
+- 📦 Installation de 40+ packages essentiels (git, kubectl, helm, argocd, zsh, zellij, etc.)
+- 🔐 Gestion sécurisée des clés SSH avec **double chiffrement** (age + SOPS)
+- 🔑 Configuration SSH automatique (GitLab, Seedbox, etc.)
+- 🎨 Configuration VS Code (extensions Kubernetes, Docker, Task, Upbound, YAML)
+- 🐚 Configuration ZSH complète (Powerlevel10k, plugins Zinit)
+- 🖥️ Configuration Zellij (terminal multiplexer)
+- ⚙️ Configuration WSL (systemd activé)
+- 🌿 Configuration Git (repos clonés automatiquement)
+- 🤖 Workflow GitOps-ready
+- 🔒 Auto-verrouillage des secrets après bootstrap
+
+**🔐 Sécurité :**
+- Double chiffrement AES-256 (age + passphrase + SOPS)
+- Clés SSH chiffrées avant commit dans Git
+- Passphrase requise pour déchiffrer
+- Auto-lock des secrets après utilisation
+- Repo public safe avec passphrase forte
+
+---
+
+## 📋 Prérequis
+
+- **WSL2** avec Debian installé
+- **Git** (préinstallé sur Debian)
+- **Accès sudo** sur WSL2
+- Connexion Internet
+
+---
+
+## ⚡ Installation rapide
+
+### **Sur une nouvelle machine :**
+
+```bash
+# 1. Clone le repo
+git clone https://github.com/ton-user/ton-repo.git
+cd ton-repo
+
+# 2. Lance le bootstrap
+task
+
+# 3. Entre ta passphrase age quand demandé
+# 🔑 Enter passphrase: ****
+
+# 4. C'est tout ! ✨
+```
+
+**Le bootstrap installe automatiquement :**
+- Homebrew
+- Tous les packages
+- Configure SSH avec tes clés déchiffrées
+- Verrouille les secrets à la fin
+
+---
+
+## 🔒 Architecture de sécurité
+
+### **Double chiffrement (2 layers AES-256)**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 🔐 Layer 1 : Chiffrement SOPS (age)                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Secrets en clair (local)                                   │
+│  └─ ~/.ssh/gitlab                                           │
+│  └─ ~/.ssh/seedbox                                          │
+│  └─ ~/.ssh/config                                           │
+│                                                             │
+│           ↓ SOPS + age (AES-256)                            │
+│                                                             │
+│  Secrets chiffrés (Git)                                     │
+│  └─ secrets/ssh-keys.sops.yaml                             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔐 Layer 2 : Chiffrement de la clé age (passphrase)        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Clé age en clair (temporaire)                              │
+│  └─ ~/.config/sops/age/keys.txt                            │
+│                                                             │
+│           ↓ age --passphrase (AES-256)                      │
+│                                                             │
+│  Clé age chiffrée (Git)                                     │
+│  └─ secrets/age-key.txt.age                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📦 Ce qui est dans Git (SAFE)                              │
+├─────────────────────────────────────────────────────────────┤
+│  ✅ secrets/age-key.txt.age      (chiffré avec passphrase) │
+│  ✅ secrets/ssh-keys.sops.yaml   (chiffré avec age)        │
+│  ✅ .sops.yaml                    (clé publique age)        │
+│  ✅ Taskfile.yaml                 (automatisation)          │
+│  ✅ .gitignore                    (protection)              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ ❌ Ce qui n'est JAMAIS dans Git                            │
+├─────────────────────────────────────────────────────────────┤
+│  ❌ ~/.config/sops/age/keys.txt  (clé age déchiffrée)      │
+│  ❌ ~/.ssh/gitlab                 (clé SSH en clair)        │
+│  ❌ ~/.ssh/seedbox                (clé SSH en clair)        │
+│  ❌ ~/.ssh/config                 (config SSH en clair)     │
+│  ❌ secrets/*.yaml                (secrets en clair)        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Pour accéder à tes secrets, un attaquant doit :**
+1. Accéder au repo Git
+2. Casser AES-256 de `age-key.txt.age` (ou deviner ta passphrase)
+3. Casser AES-256 de `ssh-keys.sops.yaml` avec la clé age
+
+**= Double protection AES-256 ! 🔐🔐**
+
+---
+
+## 🔧 Setup initial (première fois)
+
+### **Étape 1 : Installer les outils de chiffrement**
+
+```bash
+# Sur ta machine actuelle (où tu as déjà tes clés SSH)
+cd ~/mon-projet
+
+# Installer Homebrew si pas déjà installé
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# Installer age, SOPS et yq
+brew install age sops yq
+
+# Vérifier
+age --version
+sops --version
+yq --version
+```
+
+---
+
+### **Étape 2 : Générer la clé age**
+
+```bash
+# Créer le répertoire
+mkdir -p ~/.config/sops/age
+
+# Générer la clé age
+age-keygen -o ~/.config/sops/age/keys.txt
+
+# Sécuriser les permissions
+chmod 600 ~/.config/sops/age/keys.txt
+
+# Afficher la clé
+cat ~/.config/sops/age/keys.txt
+```
+
+**Tu verras :**
+```
+# created: 2025-12-18T10:00:00Z
+# public key: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+**⚠️ Note la clé publique (`age1xxx...`) pour l'étape suivante !**
+
+---
+
+### **Étape 3 : Configurer SOPS**
+
+```bash
+# Dans le répertoire de ton projet
+cd ~/mon-projet
+
+# Créer .sops.yaml avec ta clé publique age
+cat > .sops.yaml << EOF
+creation_rules:
+  - age: $(age-keygen -y ~/.config/sops/age/keys.txt)
+EOF
+
+# Vérifier
+cat .sops.yaml
+```
+
+**Résultat attendu :**
+```yaml
+creation_rules:
+  - age: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+---
+
+### **Étape 4 : Créer le fichier secrets avec tes clés SSH**
+
+#### **Pour plusieurs clés (gitlab + seedbox) :**
+
+```bash
+# Créer le répertoire secrets
+mkdir -p secrets
+
+# Créer le fichier YAML avec toutes tes clés
+cat > secrets/ssh-keys.yaml << 'EOF'
+ssh:
+  gitlab:
+    private_key: |
+EOF
+
+# Ajouter la clé privée GitLab
+cat ~/.ssh/gitlab | sed 's/^/      /' >> secrets/ssh-keys.yaml
+
+# Ajouter la clé publique GitLab
+echo "    public_key: $(cat ~/.ssh/gitlab.pub)" >> secrets/ssh-keys.yaml
+
+# Ajouter la clé Seedbox
+cat >> secrets/ssh-keys.yaml << 'EOF'
+  
+  seedbox:
+    private_key: |
+EOF
+
+cat ~/.ssh/seedbox | sed 's/^/      /' >> secrets/ssh-keys.yaml
+echo "    public_key: $(cat ~/.ssh/seedbox.pub)" >> secrets/ssh-keys.yaml
+
+# Ajouter le SSH config
+cat >> secrets/ssh-keys.yaml << 'EOF'
+
+ssh_config: |
+EOF
+
+cat ~/.ssh/config | sed 's/^/  /' >> secrets/ssh-keys.yaml
+
+# Vérifier le fichier
+cat secrets/ssh-keys.yaml
+```
+
+**Le fichier doit ressembler à ça :**
+```yaml
+ssh:
+  gitlab:
+    private_key: |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+      ...
+      -----END OPENSSH PRIVATE KEY-----
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIxxx... user@host
+  
+  seedbox:
+    private_key: |
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      ...
+      -----END OPENSSH PRIVATE KEY-----
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIyyy... user@host
+
+ssh_config: |
+  Host gitlab.com
+    HostName gitlab.com
+    User git
+    IdentityFile ~/.ssh/gitlab
+    IdentitiesOnly yes
+  
+  Host seedbox
+    HostName seedbox.example.com
+    User mathod
+    IdentityFile ~/.ssh/seedbox
+    IdentitiesOnly yes
+  
+  Host *
+    AddKeysToAgent yes
+    ServerAliveInterval 60
+```
+
+---
+
+### **Étape 5 : Chiffrer les secrets avec SOPS**
+
+```bash
+# Chiffrer le fichier avec SOPS
+sops --encrypt secrets/ssh-keys.yaml > secrets/ssh-keys.sops.yaml
+
+# Vérifier que c'est bien chiffré
+cat secrets/ssh-keys.sops.yaml
+```
+
+**Tu dois voir :**
+```yaml
+ssh:
+    gitlab:
+        private_key: ENC[AES256_GCM,data:P9DfrQ309A5j...,iv:...,tag:...,type:str]
+        public_key: ENC[AES256_GCM,data:vxEY4HRH...,iv:...,tag:...,type:str]
+    seedbox:
+        private_key: ENC[AES256_GCM,data:59/+vLLt...,iv:...,tag:...,type:str]
+        public_key: ENC[AES256_GCM,data:vbCiq3T5...,iv:...,tag:...,type:str]
+ssh_config: ENC[AES256_GCM,data:N0NwwJTI...,iv:...,tag:...,type:str]
+sops:
+    age:
+        - recipient: age1xxxxxx...
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            ...
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2025-12-18T10:30:00Z"
+    ...
+```
+
+**✅ Tout est chiffré !**
+
+```bash
+# Supprimer le fichier en clair
+rm secrets/ssh-keys.yaml
+```
+
+---
+
+### **Étape 6 : Chiffrer la clé age avec une passphrase**
+
+**C'est LA partie critique ! 🔐**
+
+```bash
+# Chiffrer la clé age avec une passphrase
+age --encrypt --passphrase ~/.config/sops/age/keys.txt > secrets/age-key.txt.age
+
+# Tu seras invité à entrer une passphrase :
+# Enter passphrase (leave empty to autogenerate a secure one): 
+# Confirm passphrase: 
+```
+
+**⚠️ IMPORTANTE : Ta passphrase doit être :**
+- ✅ **Minimum 20 caractères**
+- ✅ Mélange majuscules, minuscules, chiffres, symboles
+- ✅ **Mémorisable** (tu vas la taper souvent)
+- ✅ **Unique** (pas réutilisée ailleurs)
+- ✅ **Stockée dans un password manager** (1Password, Bitwarden)
+
+**Exemples de bonnes passphrases :**
+```
+Correct-Horse-Battery-Staple-2025!
+MonChat-Adore-LeSaumon@Juin2024
+J'aime-Les-Croissants-Chauds#42
+8kJ9mN2pQ7xR5vT1wY3zA6bC4dE0fG8hI9jK1lM2nO4=  (généré aléatoirement)
+```
+
+**🚨 CRITIQUE : Sauvegarde ta passphrase MAINTENANT !**
+
+Sans cette passphrase, tu ne pourras **JAMAIS** déchiffrer tes secrets !
+
+**Endroits sûrs pour la sauvegarder :**
+1. ✅ Password manager (1Password, Bitwarden, KeePass)
+2. ✅ Papier dans un coffre physique
+3. ✅ Mémorisée (si vraiment mémorable)
+
+```bash
+# Supprimer la clé age en clair (elle n'existe plus qu'en version chiffrée)
+rm ~/.config/sops/age/keys.txt
+
+# Vérifier qu'elle n'existe plus
+ls -la ~/.config/sops/age/
+# Doit être vide ou ne pas exister
+```
+
+---
+
+### **Étape 7 : Configurer .gitignore**
+
+```bash
+cat >> .gitignore << 'EOF'
+
+# ═══════════════════════════════════════════
+# Secrets - NE JAMAIS COMMITER EN CLAIR
+# ═══════════════════════════════════════════
+
+# Clé age déchiffrée (CRITIQUE)
+.config/sops/age/keys.txt
+
+# Clés SSH en clair
+gitlab
+gitlab.pub
+seedbox
+seedbox.pub
+id_rsa
+id_ed25519
+*.pem
+*.key
+
+# SSH config en clair
+config
+
+# Fichiers secrets en clair dans secrets/
+secrets/*.yaml
+secrets/*.yml
+secrets/*.json
+secrets/*.txt
+
+# Mais on garde les fichiers chiffrés (SAFE)
+!secrets/*.sops.yaml
+!secrets/*.age
+!.sops.yaml
+EOF
+```
+
+---
+
+### **Étape 8 : Commit dans Git**
+
+```bash
+# Vérifier ce qui sera commité
+git status
+
+# Doit montrer :
+# ✅ Taskfile.yaml
+# ✅ .sops.yaml
+# ✅ .gitignore
+# ✅ secrets/age-key.txt.age
+# ✅ secrets/ssh-keys.sops.yaml
+
+# NE DOIT PAS montrer :
+# ❌ ~/.config/sops/age/keys.txt
+# ❌ ~/.ssh/gitlab
+# ❌ ~/.ssh/seedbox
+# ❌ secrets/ssh-keys.yaml
+
+# Commit
+git add Taskfile.yaml .sops.yaml .gitignore secrets/ configs/
+git commit -m "Add bootstrap with encrypted secrets (age + SOPS)"
+git push
+```
+
+**✅ C'est SAFE ! Tout est chiffré ! 🔒**
+
+---
+
+## 🌍 Déploiement sur nouvelle machine
+
+### **Bootstrap complet (une commande)**
+
+```bash
+# 1. Clone le repo
+git clone https://github.com/ton-user/ton-repo.git
+cd ton-repo
+
+# 2. Lance le bootstrap
+task
+
+# 🔑 [sudo] password: ****
+# ✅ Accès sudo accordé
+
+# 📦 ✅ Clé age chiffrée trouvée dans le repo
+
+# 🔑 Déchiffrement de la clé age...
+# Enter passphrase: ****
+# ✅ Clé age déchiffrée
+
+# 📦 Installation Homebrew...
+# ✅ Homebrew installé
+# ✅ Télémétrie Homebrew désactivée
+
+# 📦 Installation des packages...
+# ✅ 40+ packages installés (age, sops, yq, argocd, helm, kubectl, zsh, zellij, etc.)
+
+# 🔓 Déchiffrement clés SSH...
+# ✅ Clé GitLab restaurée
+# ✅ Clé Seedbox restaurée
+# ✅ SSH config restauré
+
+# ✅ Configuration Git appliquée
+# 📥 Clonage de mathod95...
+# 📥 Clonage de wsl...
+# ✅ Dépôts GitHub synchronisés
+
+# 🔗 Création symlinks helm/kubectl...
+# ✅ Symlinks créés
+# 📦 Installation des extensions VS Code...
+# ✅ Extensions installées
+# ✅ Commande 'code' disponible globalement
+
+# ⚙️ Configuration de WSL...
+# ✅ systemd activé
+
+# 📝 Création de ~/.histfile...
+# ✅ .zshrc copié
+# 📝 Copie des abbreviations...
+# ✅ Abbreviations copiées
+# 📦 Installation des plugins Zinit...
+# ✅ Plugins Zinit installés
+# 🐚 Changement du shell par défaut vers ZSH...
+# ✅ ZSH défini comme shell par défaut
+
+# 📝 Copie de la configuration Zellij...
+# ✅ config.kdl copié
+# ✅ dracula.kdl copié
+
+# ✅ Bootstrap terminé !
+# 🔒 Secrets automatiquement verrouillés
+```
+
+**⚠️ Actions post-bootstrap :**
+
+1. **Redémarrer WSL** (pour appliquer systemd) :
+   ```powershell
+   # Dans PowerShell Windows
+   wsl --shutdown
+   # Puis relancer WSL
+   wsl
+   ```
+
+2. **Le shell ZSH sera actif au prochain lancement !** 🐚
+
+**C'est tout ! 🎉**
+
+Ton environnement complet est maintenant configuré :
+- ✅ Clés SSH dans `~/.ssh/` et prêtes à l'emploi
+- ✅ ZSH avec Powerlevel10k et tous les plugins
+- ✅ Zellij configuré avec thème Dracula
+- ✅ VS Code avec extensions Kubernetes/Docker/Task/Upbound/YAML
+- ✅ Git configuré avec tes repos clonés
+- ✅ Systemd activé dans WSL
+
+---
+
+### **Tester les connexions**
+
+```bash
+# Test GitLab
+ssh -T git@gitlab.com
+# Welcome to GitLab, @ton-user!
+
+# Test Seedbox
+ssh seedbox
+# Connexion établie
+
+# Ou utilise la commande intégrée
+task ssh:test
+```
+
+---
+
+## 🔄 Utilisation quotidienne
+
+### **Après le bootstrap, tu n'as plus besoin de rien !**
+
+```bash
+# Utiliser SSH normalement
+ssh git@gitlab.com      # ✅ Marche
+ssh seedbox             # ✅ Marche
+git clone/push/pull     # ✅ Marche
+
+# Les clés SSH sont en clair dans ~/.ssh/
+# Pas besoin de déverrouiller quoi que ce soit !
+```
+
+---
+
+### **Si tu veux modifier les secrets**
+
+```bash
+# Déverrouiller pour éditer
+task work
+
+# 🔑 Enter passphrase: ****
+# ✅ Secrets déverrouillés pour travailler
+
+# Éditer les secrets
+sops secrets/ssh-keys.sops.yaml
+
+# Voir les secrets
+sops --decrypt secrets/ssh-keys.sops.yaml
+
+# Verrouiller quand tu as fini
+task secrets:lock
+```
+
+---
+
+## 📋 Commandes disponibles
+
+### **🎯 Vue d'ensemble**
+
+| Commande | Description |
+|----------|-------------|
+| `task` | Bootstrap complet (auto-lock des secrets) |
+| `task --list` | Liste toutes les commandes disponibles |
+| `task help` | Affiche l'aide détaillée |
+
+---
+
+### **🔇 Modes d'exécution**
+
+Le Taskfile utilise `silent: true` par défaut pour un output propre et lisible.
+
+#### **Mode silent (défaut)**
+
+```bash
+task
+
+✅ Clé age chiffrée trouvée
+✅ Accès sudo accordé
+🔑 Déchiffrement de la clé age...
+✅ Clé age déchiffrée
+...
+```
+
+**✅ Output propre, uniquement les messages importants**
+
+---
+
+#### **Mode verbose (debug)**
+
+```bash
+task --verbose
+# ou
+task -v
+
+task: [age:deploy] if [ ! -f secrets/age-key.txt.age ]; then
+task: [age:deploy]   echo "❌ Fichier introuvable"
+✅ Clé age chiffrée trouvée
+
+task: [sudo:check] sudo -v
+✅ Accès sudo accordé
+...
+```
+
+**✅ Affiche les noms des tasks et les commandes bash exécutées**
+
+---
+
+#### **Mode ultra-verbose (debug avancé)**
+
+```bash
+task -vv
+
+# Affiche encore plus de détails :
+# - Variables
+# - Status checks
+# - Conditions
+# - Timestamps
+```
+
+---
+
+#### **Quand utiliser chaque mode ?**
+
+| Mode | Quand l'utiliser |
+|------|------------------|
+| `task` (silent) | ✅ Usage quotidien, output propre |
+| `task -v` | 🐛 Debug, voir les commandes exécutées |
+| `task -vv` | 🔬 Debug avancé, tout comprendre en détail |
+
+**💡 Astuce :** Pour désactiver définitivement le mode silent, modifie `silent: false` dans le `taskfile.yaml`
+
+---
+
+### **📊 Référence complète des tasks**
+
+#### **🚀 Bootstrap & Status**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task` | Bootstrap complet de l'environnement | Une commande, une passphrase, tout s'installe |
+| `task status` | Affiche le statut complet | Vérifie Homebrew, secrets, SSH, packages |
+
+---
+
+#### **🔐 Gestion des secrets**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task work` | Déverrouille pour travailler (sans auto-lock) | Pour éditer SOPS, ajouter des clés |
+| `task secrets:unlock` | Déverrouille les secrets | Demande la passphrase |
+| `task secrets:lock` | Verrouille les secrets | Supprime la clé age déchiffrée |
+| `task secrets:status` | Statut (verrouillé/déverrouillé) | Vérifie si la clé age existe |
+| `task clean` | Nettoie et verrouille les secrets | Équivalent à `secrets:lock` |
+
+---
+
+#### **🔑 SSH**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task ssh:setup` | Configure SSH (déchiffre les clés) | Automatique dans bootstrap |
+| `task ssh:test` | Teste les connexions SSH | Vérifie GitLab, Seedbox, etc. |
+
+---
+
+#### **🌿 Git**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task git:pull` | Met à jour les repos GitHub locaux | Vérifie modifs locales avant pull |
+
+*Note: `git:config` et `git:clone` sont automatiques dans le bootstrap*
+
+---
+
+#### **🍺 Homebrew**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task brew:update` | Met à jour les dépôts Homebrew | Équivalent à `brew update` |
+| `task brew:upgrade` | Upgrade tous les packages | Équivalent à `brew upgrade` |
+| `task brew:list` | Liste tous les packages installés | Sortie brute avec versions |
+| `task brew:list:pretty` | Liste stylée avec emojis | Uniquement packages installés manuellement |
+
+---
+
+#### **📦 Packages**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task versions` | Affiche toutes les versions | Packages installés + non installés avec emojis |
+
+---
+
+#### **🎨 VS Code**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task vscode:setup` | Configure VS Code (symlinks + extensions) | Automatique dans bootstrap |
+
+*Crée les symlinks helm/kubectl pour l'extension Kubernetes et installe les extensions*
+
+---
+
+#### **🐚 ZSH**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task zsh:setup` | Configure ZSH complet | Automatique dans bootstrap |
+
+*Configure histfile, ajoute à /etc/shells, copie .zshrc et abbreviations, installe plugins Zinit, définit comme shell par défaut*
+
+---
+
+#### **🖥️ Zellij**
+
+| Task | Description | Usage |
+|------|-------------|-------|
+| `task zellij:setup` | Configure Zellij | Automatique dans bootstrap |
+
+*Copie config.kdl et thème Dracula*
+
+---
+
+### **🎯 Exemples d'usage**
+
+```bash
+# Premier déploiement
+task                          # Bootstrap complet (une passphrase, tout s'installe)
+
+# Usage quotidien
+ssh git@gitlab.com            # SSH fonctionne direct
+git clone/push/pull           # Git fonctionne direct
+
+# Maintenance
+task brew:update              # Met à jour Homebrew
+task brew:upgrade             # Upgrade les packages
+task versions                 # Voir ce qui est installé
+task git:pull                 # Mettre à jour les repos locaux
+
+# Éditer les secrets (rare)
+task work                     # Déverrouille
+sops secrets/ssh-keys.sops.yaml  # Édite
+task secrets:lock             # Verrouille
+
+# Vérifications
+task status                   # Statut complet
+task ssh:test                 # Tester SSH
+```
+
+---
+
+## 🔐 Gestion des secrets
+
+### **Architecture des secrets**
+
+```
+secrets/
+├── age-key.txt.age          # Clé age chiffrée (Layer 2)
+└── ssh-keys.sops.yaml       # Secrets chiffrés (Layer 1)
+
+~/.config/sops/age/
+└── keys.txt                 # Clé age déchiffrée (temporaire)
+
+~/.ssh/
+├── gitlab                   # Clé SSH en clair (après bootstrap)
+├── gitlab.pub
+├── seedbox
+├── seedbox.pub
+└── config
+```
+
+### **Cycle de vie des secrets**
+
+```
+Bootstrap :
+1. age:deploy       → Vérifie que age-key.txt.age existe
+2. secrets:unlock   → Déchiffre age-key.txt.age avec passphrase
+                    → Crée ~/.config/sops/age/keys.txt (temporaire)
+3. ssh:decrypt      → Utilise la clé age pour déchiffrer ssh-keys.sops.yaml
+                    → Crée ~/.ssh/gitlab, ~/.ssh/seedbox, ~/.ssh/config
+4. secrets:lock     → Supprime ~/.config/sops/age/keys.txt (auto)
+
+Résultat :
+✅ ~/.ssh/gitlab existe et marche
+✅ ~/.ssh/seedbox existe et marche
+✅ ~/.ssh/config existe et marche
+🔒 La clé age est verrouillée (supprimée)
+```
+
+### **Quand unlock/lock est nécessaire**
+
+**❌ PAS besoin pour :**
+- Utiliser SSH après bootstrap
+- Git clone/push/pull
+- Utilisation quotidienne normale
+
+**✅ BESOIN pour :**
+- Éditer `secrets/ssh-keys.sops.yaml` avec SOPS
+- Ajouter une nouvelle clé SSH
+- Modifier le SSH config dans SOPS
+- Voir les secrets déchiffrés
+
+---
+
+### **Ajouter une nouvelle clé SSH**
+
+```bash
+# 1. Déverrouiller
+task secrets:unlock
+# 🔑 Entre passphrase
+
+# 2. Éditer
+sops secrets/ssh-keys.sops.yaml
+
+# 3. Ajouter ta nouvelle clé dans le fichier YAML
+# Par exemple, ajouter "github" :
+#
+# ssh:
+#   gitlab:
+#     ...
+#   seedbox:
+#     ...
+#   github:  # ← Nouveau !
+#     private_key: |
+#       -----BEGIN OPENSSH PRIVATE KEY-----
+#       ...
+#       -----END OPENSSH PRIVATE KEY-----
+#     public_key: ssh-ed25519 AAAA...
+
+# 4. Sauvegarder et quitter (SOPS rechiffre automatiquement)
+
+# 5. Rechiffrer la nouvelle clé dans ~/.ssh/
+task ssh:decrypt
+
+# 6. Tester
+ssh -T git@github.com
+
+# 7. Commit
+git add secrets/ssh-keys.sops.yaml
+git commit -m "Add GitHub SSH key"
+git push
+
+# 8. Verrouiller
+task secrets:lock
+```
+
+---
+
+### **Changer la passphrase de la clé age**
+
+```bash
+# 1. Déchiffrer avec l'ancienne passphrase
+age --decrypt secrets/age-key.txt.age > ~/.config/sops/age/keys.txt
+# 🔑 Entre ANCIENNE passphrase
+
+# 2. Rechiffrer avec une NOUVELLE passphrase
+age --encrypt --passphrase ~/.config/sops/age/keys.txt > secrets/age-key.txt.age
+# 🔑 Entre NOUVELLE passphrase
+# 🔑 Confirme NOUVELLE passphrase
+
+# 3. Commit
+git add secrets/age-key.txt.age
+git commit -m "Rotate age key passphrase"
+git push
+
+# 4. Nettoyer
+rm ~/.config/sops/age/keys.txt
+```
+
+---
+
+## 🆘 Dépannage
+
+### **Erreur : "Permission denied (publickey)"**
+
+**Problème :** Git ne peut pas se connecter à GitLab/GitHub
+
+**Solutions :**
+
+```bash
+# Vérifier que les clés SSH existent
+ls -la ~/.ssh/
+# Doit montrer : gitlab, gitlab.pub, seedbox, seedbox.pub, config
+
+# Vérifier les permissions
+chmod 600 ~/.ssh/gitlab
+chmod 600 ~/.ssh/seedbox
+chmod 600 ~/.ssh/config
+
+# Tester la connexion
+ssh -T git@gitlab.com
+task ssh:test
+
+# Si ça ne marche toujours pas, relancer ssh:setup
+task secrets:unlock
+task ssh:setup
+```
+
+---
+
+### **Erreur : "no age identity found"**
+
+**Problème :** SOPS ne trouve pas la clé age déchiffrée
+
+**Solution :**
+
+```bash
+# Déchiffrer la clé age
+task secrets:unlock
+# 🔑 Entre passphrase
+
+# Vérifier
+ls -la ~/.config/sops/age/keys.txt
+# Doit exister
+
+# Réessayer
+sops --decrypt secrets/ssh-keys.sops.yaml
+```
+
+---
+
+### **Erreur : "failed to decrypt" ou "MAC mismatch"**
+
+**Problème :** Mauvaise passphrase ou fichier corrompu
+
+**Solutions :**
+
+```bash
+# 1. Vérifier que le fichier existe
+ls -la secrets/age-key.txt.age
+
+# 2. Réessayer avec la bonne passphrase
+age --decrypt secrets/age-key.txt.age > ~/.config/sops/age/keys.txt
+
+# 3. Si vraiment corrompu, restaurer depuis Git
+git checkout secrets/age-key.txt.age
+```
+
+---
+
+### **J'ai oublié ma passphrase !**
+
+**Malheureusement, c'est GAME OVER.** 😢
+
+Sans la passphrase, impossible de déchiffrer `age-key.txt.age`, donc impossible d'accéder aux secrets.
+
+**Solutions :**
+
+1. **Restaurer depuis un backup**
+   - Vérifie ton password manager
+   - Vérifie tes notes papier
+   - Vérifie tes backups
+
+2. **Réinitialiser complètement** (dernière option)
+   ```bash
+   # Générer une nouvelle clé age
+   age-keygen -o ~/.config/sops/age/keys.txt
+   
+   # Mettre à jour .sops.yaml
+   cat > .sops.yaml << EOF
+   creation_rules:
+     - age: $(age-keygen -y ~/.config/sops/age/keys.txt)
+   EOF
+   
+   # Rechiffrer tous les secrets
+   sops updatekeys secrets/ssh-keys.sops.yaml
+   
+   # Rechiffrer la clé age avec NOUVELLE passphrase
+   age --encrypt --passphrase ~/.config/sops/age/keys.txt > secrets/age-key.txt.age
+   
+   # Commit
+   git add .sops.yaml secrets/
+   git commit -m "Regenerate age key (passphrase lost)"
+   git push
+   ```
+
+**Prévention :**
+- ✅ Sauvegarde la passphrase à **3+ endroits différents**
+- ✅ Teste régulièrement que tu peux déchiffrer
+- ✅ Stocke dans un password manager professionnel
+
+---
+
+### **Le bootstrap échoue à l'installation de Homebrew**
+
+**Problème :** Erreur pendant l'installation de Homebrew
+
+**Solutions :**
+
+```bash
+# Vérifier les dépendances
+sudo apt-get update
+sudo apt-get install -y build-essential procps curl file git
+
+# Réinstaller Homebrew manuellement
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Configurer le PATH
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+
+# Relancer le bootstrap
+task
+```
+
+---
+
+### **Les packages Homebrew ne s'installent pas**
+
+**Problème :** Erreur lors de `brew install`
+
+**Solutions :**
+
+```bash
+# Mettre à jour Homebrew
+brew update
+
+# Réessayer l'installation
+brew install age sops yq argocd bat eza git helm kind kubectl kubecolor kubectx vim zsh zellij
+
+# Si un package spécifique échoue, installer le reste
+brew install age sops yq
+brew install argocd helm kubectl
+# etc.
+```
+
+---
+
+## ❓ FAQ
+
+### **Pourquoi double chiffrement (age + SOPS) ?**
+
+**Layer 1 (SOPS + age) :** Chiffre les secrets SSH
+- Permet de versionner les secrets dans Git
+- Permet de modifier facilement (juste éditer avec SOPS)
+- Standard GitOps
+
+**Layer 2 (age + passphrase) :** Chiffre la clé age
+- Protection supplémentaire
+- Même si quelqu'un accède au repo, il faut la passphrase
+- Permet de commiter la clé age dans Git en toute sécurité
+
+**Résultat : Double AES-256 ! 🔐🔐**
+
+---
+
+### **Puis-je utiliser un repo public ?**
+
+**OUI, si ta passphrase est forte (20+ caractères) !**
+
+Avec une passphrase forte, le double chiffrement AES-256 est quasi-impossible à casser, même pour un attaquant avec des moyens importants.
+
+**Avantages repo public :**
+- ✅ Clone super simple (`git clone https://...`)
+- ✅ Pas de chicken-and-egg (pas besoin de clé SSH pour cloner)
+- ✅ Peut servir de portfolio
+- ✅ Open-source friendly
+
+**Mais vérifie :**
+- ✅ Passphrase 20+ caractères aléatoires
+- ✅ Pas de secrets ultra-sensibles (clés API prod d'entreprise)
+- ✅ Juste tes clés SSH perso
+
+---
+
+### **Comment régénérer toutes les clés ?**
+
+```bash
+# 1. Supprimer l'ancien
+rm -rf secrets/
+
+# 2. Régénérer la clé age
+age-keygen -o ~/.config/sops/age/keys.txt
+
+# 3. Recréer .sops.yaml
+cat > .sops.yaml << EOF
+creation_rules:
+  - age: $(age-keygen -y ~/.config/sops/age/keys.txt)
+EOF
+
+# 4. Rechiffrer les secrets
+# (suivre les étapes 4-6 du Setup initial)
+
+# 5. Commit
+git add .sops.yaml secrets/
+git commit -m "Regenerate all encryption keys"
+git push
+```
+
+---
+
+### **Puis-je ajouter d'autres types de secrets ?**
+
+**Oui ! SOPS peut chiffrer n'importe quoi :**
+
+```yaml
+# secrets/all-secrets.sops.yaml
+ssh:
+  gitlab:
+    private_key: |
+      ...
+  seedbox:
+    private_key: |
+      ...
+
+api_keys:
+  openai: sk-xxxxx
+  github: ghp_xxxxx
+  aws:
+    access_key_id: AKIAXXXXX
+    secret_access_key: xxxxx
+
+database:
+  postgres:
+    host: db.example.com
+    user: admin
+    password: super-secret
+
+tokens:
+  gitlab_token: glpat-xxxxx
+  npm_token: npm_xxxxx
+```
+
+```bash
+# Chiffrer
+sops --encrypt secrets/all-secrets.yaml > secrets/all-secrets.sops.yaml
+
+# Utiliser
+sops --decrypt secrets/all-secrets.sops.yaml | yq '.api_keys.openai'
+```
+
+---
+
+### **Comment partager avec une équipe ?**
+
+**Option 1 : Partager la passphrase** (simple)
+- Chacun a le même `age-key.txt.age`
+- Partage la passphrase via un canal sécurisé (1Password Teams, etc.)
+
+**Option 2 : Clés age multiples** (avancé)
+```yaml
+# .sops.yaml
+creation_rules:
+  - age: >-
+      age1alice...,
+      age1bob...,
+      age1charlie...
+```
+
+Chacun a sa propre clé age, tous peuvent déchiffrer.
+
+---
+
+### **Les clés SSH restent en clair après bootstrap ?**
+
+**OUI, et c'est normal ! ✅**
+
+Après le bootstrap :
+- `~/.ssh/gitlab` est en clair
+- `~/.ssh/seedbox` est en clair
+- `~/.ssh/config` est en clair
+
+**Pourquoi ?** Parce que SSH a besoin de les lire en clair pour fonctionner !
+
+**Mais :**
+- ✅ Elles ne sont **jamais** dans Git (protégées par `.gitignore`)
+- ✅ Elles sont sur ton PC local uniquement
+- ✅ Dans Git, elles sont chiffrées (`ssh-keys.sops.yaml`)
+
+**Tu n'as besoin de unlock/lock QUE si tu veux modifier les secrets dans SOPS.**
+
+---
+
+### **Que faire en cas de compromission ?**
+
+**Si tu penses que ta passphrase est compromise :**
+
+```bash
+# 1. Changer immédiatement la passphrase
+age --decrypt secrets/age-key.txt.age > ~/.config/sops/age/keys.txt
+age --encrypt --passphrase ~/.config/sops/age/keys.txt > secrets/age-key.txt.age
+
+# 2. Regénérer toutes les clés SSH
+ssh-keygen -t ed25519 -C "email@example.com" -f ~/.ssh/gitlab
+ssh-keygen -t ed25519 -C "email@example.com" -f ~/.ssh/seedbox
+
+# 3. Mettre à jour sur GitLab/Seedbox
+
+# 4. Rechiffrer dans SOPS
+sops secrets/ssh-keys.sops.yaml
+# (mettre à jour avec les nouvelles clés)
+
+# 5. Commit
+git add secrets/
+git commit -m "Rotate all secrets (compromission)"
+git push --force  # Force si nécessaire
+```
+
+---
+
+## 📚 Ressources
+
+### **Documentation**
+
+- [age](https://github.com/FiloSottile/age) - Outil de chiffrement moderne
+- [SOPS](https://github.com/mozilla/sops) - Secrets Operations (Mozilla)
+- [Task](https://taskfile.dev/) - Task runner moderne
+- [Homebrew](https://brew.sh/) - Package manager
+- [ZSH](https://www.zsh.org/) - Z Shell
+- [Powerlevel10k](https://github.com/romkatv/powerlevel10k) - ZSH theme
+- [Zellij](https://zellij.dev/) - Terminal multiplexer
+
+### **Sécurité**
+
+- [OWASP Cheat Sheet](https://cheatsheetseries.owasp.org/)
+- [How to create strong passphrases](https://www.eff.org/dice)
+
+---
+
+## 🎉 Conclusion
+
+Tu as maintenant un système de bootstrap **professionnel et ultra-sécurisé** !
+
+**✅ Ce que tu as :**
+- Bootstrap automatique en une commande
+- Double chiffrement AES-256
+- Gestion sécurisée des secrets
+- Configuration complète (SSH, Git, VS Code, ZSH, Zellij, WSL)
+- Workflow GitOps-ready
+- Portable sur toutes tes machines
+
+**🔑 Points critiques à retenir :**
+1. 🔐 **Sauvegarde ta passphrase** (3+ endroits différents)
+2. 🔒 **Ne commit JAMAIS** les fichiers en clair
+3. 🎯 **Teste régulièrement** le déchiffrement
+4. 🧹 **Utilise secrets:lock** après avoir modifié les secrets
+5. ⚠️ **Redémarre WSL** après le bootstrap (systemd)
+
+**🚀 Prochaines étapes :**
+1. Clone sur une nouvelle machine pour tester
+2. Personnalise le Taskfile à tes besoins
+3. Ajoute tes fichiers de config dans `configs/`
+4. Ajoute d'autres secrets si nécessaire
+5. Partage avec ton équipe (si applicable)
+
+---
+
+**Bon bootstrap ! 🎊**

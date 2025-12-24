@@ -1,0 +1,185 @@
+```bash
+sudo apt update
+sudo apt install curl -y
+sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+task --version
+curl -L -o taskfile.yaml https://raw.githubusercontent.com/Mathod95/task/main/taskfile.yaml
+task
+```
+
+
+# 🚀 Bootstrap Environment - Taskfile
+
+Automatisation complète de l'installation et de la gestion de l'environnement de développement sur Debian WSL2.
+
+## 📋 Prérequis
+
+- **Debian WSL2** sur Windows
+- **Task** installé ([Installation](https://taskfile.dev/installation/))
+- Accès **sudo**
+
+## ⚡ Installation rapide
+
+```bash
+# Clone ou copie le Taskfile.yaml dans ton répertoire
+# Puis lance simplement :
+task
+```
+
+## 🎯 Fonctionnalités
+
+### 🔧 Installation automatique
+- **Homebrew** : Gestionnaire de paquets pour Linux
+- **Packages essentiels** : ArgoCD, Bat, Eza, Git, Helm, Kind, Kubectl, Kubecolor, Kubectx, Vim, Zsh, Zellij
+
+### 🛠️ Gestion des packages
+- Installation intelligente (une seule fois)
+- Mise à jour contrôlée manuellement
+- Upgrade de tous les packages
+- Listage avec différents formats
+
+## 📚 Commandes disponibles
+
+### Installation
+
+```bash
+task                    # Bootstrap complet (première installation)
+task bootstrap          # Alias pour l'installation complète
+```
+
+### Gestion Homebrew
+
+```bash
+task brew:update        # Met à jour les dépôts Homebrew
+task brew:upgrade       # Met à jour tous les packages installés
+```
+
+### Listage des packages
+
+```bash
+task brew:list          # Liste tous les packages (avec dépendances)
+task brew:list:leaves   # Liste uniquement les packages installés manuellement
+task brew:list:pretty   # Affichage stylé avec emojis 🎨
+```
+
+## 📦 Packages installés
+
+| Outil | Description |
+|-------|-------------|
+| 🔐 **ArgoCD** | GitOps continuous delivery tool |
+| 🦇 **Bat** | Cat clone avec coloration syntaxique |
+| 📁 **Eza** | Remplacement moderne de `ls` |
+| 🐙 **Git** | Système de contrôle de version |
+| 🛳️ **Helm** | Gestionnaire de packages Kubernetes |
+| 🧱 **Kind** | Kubernetes in Docker |
+| 🐋 **Kubectl** | CLI Kubernetes |
+| 🎨 **Kubecolor** | Colorisation pour kubectl |
+| 🧭 **Kubectx** | Changement rapide de contexte K8s |
+| 🐍 **Vim** | Éditeur de texte |
+| 🐚 **Zsh** | Shell puissant |
+| 🧩 **Zellij** | Multiplexeur de terminal |
+
+## 🔄 Workflow typique
+
+### Première installation
+```bash
+# 1. Installe tout (Homebrew + packages)
+task
+
+# 2. Redémarre ton terminal
+# ou exécute : source ~/.bashrc
+
+# 3. Vérifie l'installation
+task brew:list:pretty
+```
+
+### Mises à jour régulières
+```bash
+# Met à jour les dépôts
+task brew:update
+
+# Upgrade tous les packages
+task brew:upgrade
+
+# Vérifie les versions
+task brew:list:pretty
+```
+
+## 🎨 Exemple d'affichage
+
+```
+📦 Packages installés :
+--------------------------------------------
+🔐  ArgoCD         : 2.9.3
+🦇  Bat            : 0.24.0
+📁  Eza            : 0.17.0
+🐙  Git            : 2.43.0
+🛳️  Helm           : 3.13.3
+🧱  Kind           : 0.20.0
+🐋  Kubectl        : 1.29.0
+🎨  Kubecolor      : 0.2.2
+🧭  Kubectx        : 0.9.5
+🐍  Vim            : 9.0.2116
+🐚  Zsh            : 5.9
+🧩  Zellij         : 0.39.2
+--------------------------------------------
+```
+
+## 🏗️ Architecture du Taskfile
+
+```
+├── bootstrap          # Point d'entrée principal
+├── sudo:check         # Gestion des privilèges
+├── brew:*             # Gestion Homebrew
+│   ├── install        # Installation (run: once)
+│   ├── update         # Mise à jour des dépôts
+│   ├── upgrade        # Upgrade packages
+│   └── list:*         # Différents formats de listage
+└── packages:install   # Installation des packages
+```
+
+## ⚙️ Configuration
+
+### Variables globales
+- `BREW`: Chemin vers le binaire Homebrew (`/home/linuxbrew/.linuxbrew/bin/brew`)
+
+### Comportements intelligents
+- ✅ `brew:install` : S'exécute une seule fois (`run: once`)
+- ✅ `sudo:check` : Demande le mot de passe une fois au début
+- ✅ `packages:install` : Installation sans upgrade automatique
+- ✅ Contrôle total : Tu décides quand upgrader
+
+## 🔍 Dépannage
+
+### Homebrew n'est pas dans le PATH
+```bash
+source ~/.bashrc
+# ou redémarre ton terminal
+```
+
+### Forcer la réinstallation de Homebrew
+```bash
+task --force brew:install
+```
+
+### Voir toutes les tâches disponibles
+```bash
+task --list
+# ou
+task -l
+```
+
+## 📝 Notes importantes
+
+- **Première exécution** : Brew est installé, packages installés (sans update)
+- **Exécutions suivantes** : Brew est skippé, packages réinstallés (sans upgrade)
+- **Upgrades** : Toujours manuels avec `task brew:upgrade`
+- **Git** : Installé via apt ET brew (version brew prioritaire dans le PATH)
+
+## 🤝 Contribution
+
+Pour ajouter de nouveaux packages, édite la section `packages:install` dans le Taskfile.
+
+## 📄 Licence
+
+Libre d'utilisation - Fait avec ❤️ et Task.dev

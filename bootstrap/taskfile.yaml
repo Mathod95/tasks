@@ -1,0 +1,680 @@
+version: '3'
+
+# Gestion des erreurs : arrêt immédiat si une commande échoue (errexit) et propagation des erreurs dans les pipes (pipefail)
+set: [errexit, pipefail]
+
+vars:
+  # Changer à ">/dev/null 2>&1" pour masquer toutes les sorties
+  QUIET: ""
+  # Chemin absolu vers Homebrew (utilisé lors du bootstrap avant que PATH soit configuré)
+  BREW: /home/linuxbrew/.linuxbrew/bin/brew
+  # Chemin absolu vers SOPS (utilisé lors du bootstrap avant que PATH soit configuré)
+  SOPS: /home/linuxbrew/.linuxbrew/bin/sops
+  
+  # Liste des packages Homebrew à installer (source unique de vérité)
+  BREW_PACKAGES:
+    - age
+    # - ansible
+    - argocd
+    # - argocd-autopilot
+    # - asciinema
+    # - awscli
+    - bat
+    # - btop
+    # - cilium-cli
+    - cloud-provider-kind
+    # - crossplane
+    # - curl
+    # - docker
+    - eza
+    - fastfetch
+    # - fd
+    - fzf
+    # - git
+    - helm
+    # - k9s
+    # - keychain
+    - kind
+    # - kube-linter
+    # - kube-score
+    - kubecolor
+    # - kubectl
+    # - kubescape
+    - kubectx
+    # - krew
+    # - kustomize
+    # - kyverno
+    # - neovim
+    # - opentofu
+    - ripgrep
+    - sops
+    # - systemd
+    # - velero
+    - vim
+    - wget
+    - yq
+    - zellij
+    - zinit
+    - zsh
+
+tasks:
+  # ==========================================
+  # Point d'entrée principal
+  # ==========================================
+  
+  default:
+    desc: "Bootstrap complet de l'environnement"
+    cmds:
+      - task: bootstrap
+
+  bootstrap:
+    desc: "Installation et configuration complète"
+    # Les aliases permettent d'appeler cette tâche avec différents noms
+    # Exemple: task bootstrap, task setup ou task init font la même chose
+    aliases: [setup, init]
+    output:
+      group:
+        begin: '🚀 ═══════════════════════════════════════════════════════════════'
+        end: '✅ ═══════════════════════════════════════════════════════════════'
+    cmds:
+      - task: sudo:main
+      - task: age:main
+      - task: locales:main
+      - task: brew:main
+      - task: sops:main
+      - task: git:main
+      - task: zsh:main
+      # - task: vscode:main
+      # - task: wsl:main
+      - task: status
+      - cmd: echo "✅ Bootstrap terminé !"
+        silent: true
+
+  # ==========================================
+  # Sudo
+  # ==========================================
+
+  sudo:main:
+    desc: "Authentification sudo pour le bootstrap"
+    cmds:
+      - sudo -v
+      - cmd: echo "✅ Authentification validée"
+        silent: true
+
+  # ==========================================
+  # Age
+  # ==========================================
+
+  age:main:
+    desc: "Décrypter la clé age"
+    cmds:
+      - task: age:decrypt:key
+
+  age:decrypt:key:
+    desc: "Décrypter la clé age avec passphrase"
+    cmds:
+      - cmd: echo "🔐 Décryptage de la clé age..."
+        silent: true
+      - mkdir -p ~/.config/sops/age
+      - age --decrypt --output ~/.config/sops/age/keys.txt secrets/age-key.txt.age
+      - chmod 600 ~/.config/sops/age/keys.txt
+      - cmd: echo "✅ Clé age décryptée"
+        silent: true
+      - defer: echo "🔒 Clé age supprimée"
+      - defer: rm -f ~/.config/sops/age/keys.txt
+    status:
+      - test -f ~/.config/sops/age/keys.txt
+
+  # ==========================================
+  # Locales
+  # ==========================================
+
+  locales:main:
+    desc: "Configuration complète des locales"
+    run: once
+    cmds:
+      - task: locales:install:package
+      - task: locales:generate
+
+  locales:install:package:
+    desc: "Installer le package locales"
+    cmds:
+      - sudo apt-get update {{.QUIET}}
+      - sudo apt-get install -y locales {{.QUIET}}
+      - sudo rm -rf /var/lib/apt/lists/*
+      - cmd: echo "✅ Package locales installé"
+        silent: true
+    status:
+      - dpkg -s locales >/dev/null 2>&1
+
+  locales:generate:
+    desc: "Générer la locale en_US.UTF-8"
+    cmds:
+      - sudo localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 {{.QUIET}}
+      - cmd: echo "✅ Locale générée"
+        silent: true
+    status:
+      - locale -a | grep -q "en_US.utf8"
+
+  # ==========================================
+  # Homebrew
+  # ==========================================
+
+  brew:main:
+    desc: "Installation complète de Homebrew et packages"
+    run: once
+    cmds:
+      - task: brew:install:deps
+      - task: brew:install:binary
+      - task: brew:configure:path
+      - task: brew:analytics:off
+      - task: brew:install:packages
+      - task: brew:verify:packages
+
+  brew:install:deps:
+    desc: "Installer les dépendances système requises"
+    cmds:
+      - sudo apt-get update {{.QUIET}}
+      - sudo apt-get install -y build-essential procps curl file git wget {{.QUIET}}
+      - cmd: echo "✅ Dépendances système installées"
+        silent: true
+    status:
+      - dpkg -s build-essential >/dev/null 2>&1
+
+  brew:install:binary:
+    desc: "Installer le binaire Homebrew"
+    cmds:
+      - NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" {{.QUIET}}
+      - cmd: echo "✅ Homebrew installé avec succès"
+        silent: true
+    status:
+      - command -v brew
+
+  brew:configure:path:
+    desc: "Configurer le PATH pour Homebrew"
+    cmds:
+      - echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+      - eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+      - cmd: echo "✅ PATH configuré"
+        silent: true
+    status:
+      - grep -q "brew shellenv" ~/.bashrc
+
+  brew:analytics:off:
+    desc: "Désactiver la télémétrie Homebrew"
+    cmds:
+      - '{{.BREW}} analytics off {{.QUIET}}'
+      - cmd: echo "✅ Télémétrie Homebrew désactivée"
+        silent: true
+    status:
+      - test "$({{.BREW}} analytics state)" = "Analytics are disabled."
+
+  brew:install:packages:
+    desc: "Installer les packages Homebrew essentiels"
+    output: prefixed
+    requires:
+      vars: [BREW, BREW_PACKAGES]
+    preconditions:
+      - sh: command -v {{.BREW}} >/dev/null 2>&1
+        msg: "❌ Homebrew n'est pas installé. Exécutez 'task brew:main' d'abord."
+    cmds:
+      - '{{.BREW}} install {{.BREW_PACKAGES | join " "}} {{.QUIET}}'
+      - cmd: echo "✅ Tous les packages sont installés"
+        silent: true
+
+  brew:verify:packages:
+    desc: "Vérifier les installations des packages"
+    output: prefixed
+    cmds:
+      - cmd: echo "🔍 Vérification des installations..."
+        silent: true
+      - |
+        {{range .BREW_PACKAGES}}
+        if command -v {{.}} >/dev/null 2>&1; then
+          echo "✅ {{.}}"
+        else
+          echo "❌ {{.}} manquant"
+        fi
+        {{end}}
+      - cmd: echo "✅ Vérification des packages terminée"
+        silent: true
+
+  # ==========================================
+  # Homebrew - Tasks standalone (maintenance)
+  # ==========================================
+
+  brew:refresh:
+    desc: "Maintenance complète Homebrew (update + upgrade + cleanup)"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - task: brew:update
+      - task: brew:upgrade
+      - task: brew:cleanup
+      - cmd: echo "✅ Maintenance Homebrew terminée"
+        silent: true
+
+  brew:update:
+    desc: "Mettre à jour les dépôts Homebrew"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - brew update {{.QUIET}}
+      - cmd: echo "✅ Dépôts Homebrew mis à jour"
+        silent: true
+
+  brew:upgrade:
+    desc: "Upgrader tous les packages Homebrew"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - brew upgrade {{.QUIET}}
+      - cmd: echo "✅ Packages Homebrew upgradés"
+        silent: true
+
+  brew:cleanup:
+    desc: "Nettoyer les anciennes versions de packages"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - brew cleanup {{.QUIET}}
+      - cmd: echo "✅ Nettoyage terminé"
+        silent: true
+
+  brew:list:
+    desc: "Lister tous les packages installés avec leurs versions"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - cmd: echo "📋 Packages Homebrew installés :"
+        silent: true
+      - brew list --versions
+
+  brew:leaves:
+    desc: "Lister les packages installés manuellement avec versions"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - cmd: echo "🍃 Packages installés manuellement :"
+        silent: true
+      - brew leaves | xargs brew list --versions
+
+  # ==========================================
+  # SOPS
+  # ==========================================
+
+  sops:main:
+    desc: "Déployer les secrets SOPS"
+    cmds:
+      - task: sops:deploy:ssh
+
+  sops:deploy:ssh:
+    desc: "Déployer les clés SSH depuis SOPS"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    requires:
+      vars: [SOPS]
+    preconditions:
+      - sh: command -v {{.SOPS}} >/dev/null 2>&1
+        msg: "❌ SOPS n'est pas installé. Exécutez 'task brew:main' d'abord."
+      - sh: test -f ~/.config/sops/age/keys.txt
+        msg: "❌ Clé age non disponible. Exécutez 'task age:main' d'abord."
+      - sh: test -f secrets/ssh-keys.sops.yaml
+        msg: "❌ Fichier secrets/ssh-keys.sops.yaml introuvable."
+    cmds:
+      - cmd: echo "🔑 Déploiement des clés SSH..."
+        silent: true
+      - mkdir -p ~/.ssh
+      - chmod 700 ~/.ssh
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["gitlab"]["private_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/gitlab'
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["gitlab"]["public_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/gitlab.pub'
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["seedbox"]["private_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/seedbox'
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["seedbox"]["public_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/seedbox.pub'
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["github"]["private_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/github'
+      - '{{.SOPS}} --decrypt --extract ''["ssh"]["github"]["public_key"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/github.pub'
+      - '{{.SOPS}} --decrypt --extract ''["ssh_config"]'' secrets/ssh-keys.sops.yaml > ~/.ssh/config'
+      - chmod 600 ~/.ssh/gitlab ~/.ssh/seedbox ~/.ssh/github ~/.ssh/config
+      - chmod 644 ~/.ssh/gitlab.pub ~/.ssh/seedbox.pub ~/.ssh/github.pub
+      - cmd: echo "✅ Clés SSH déployées"
+        silent: true
+
+  # ==========================================
+  # Git
+  # ==========================================
+
+  git:main:
+    desc: "Configuration complète de Git"
+    run: once
+    cmds:
+      - task: git:configure:user
+
+  git:configure:user:
+    desc: "Configurer l'utilisateur Git global"
+    cmds:
+      - git config --global user.email "felix.mathias95@gmail.com"
+      - git config --global user.name "Mathod"
+      - cmd: echo "✅ Utilisateur Git configuré"
+        silent: true
+    status:
+      - test "$(git config --global user.email)" = "felix.mathias95@gmail.com"
+      - test "$(git config --global user.name)" = "Mathod"
+
+  # ==========================================
+  # SSH
+  # ==========================================
+
+  # ssh:configure:agent:
+  #   desc: "Configurer le démarrage automatique de l'agent SSH"
+  #   cmds:
+  #     - cmd: echo "🔧 Configuration de l'agent SSH..."
+  #       silent: true
+  #     - bash -c 'cat >> ~/.bashrc << "EOF"
+
+  # # Agent SSH - Démarrage automatique
+  # if [ -z "$SSH_AUTH_SOCK" ]; then
+  #   eval $(ssh-agent -s) > /dev/null
+  # fi
+  # EOF'
+  #     - cmd: echo "✅ Agent SSH configuré (démarrage automatique)"
+  #       silent: true
+  #   status:
+  #     - grep -q "Agent SSH - Démarrage automatique" ~/.bashrc
+
+  ssh:add:keys:
+    desc: "Ajouter les clés SSH à l'agent (demande passphrases)"
+    cmds:
+      - cmd: echo "🔑 Ajout des clés SSH à l'agent..."
+        silent: true
+      - ssh-add ~/.ssh/github
+      - ssh-add ~/.ssh/gitlab
+      - ssh-add ~/.ssh/seedbox
+      - cmd: echo "✅ Clés SSH ajoutées à l'agent"
+        silent: true
+
+  # ==========================================
+  # Zsh
+  # ==========================================
+
+  zsh:main:
+    desc: "Configuration complète de Zsh"
+    run: once
+    cmds:
+      - task: zsh:configure:histfile
+      - task: zsh:configure:add-to-shells
+      - task: zsh:configure:default-shell
+      - task: zsh:deploy:config
+      # - task: zsh:plugins:install
+
+  zsh:configure:histfile:
+    desc: "Créer le fichier d'historique Zsh"
+    cmds:
+      - touch ~/.histfile
+      - chmod 600 ~/.histfile
+      - cmd: echo "✅ Fichier d'historique Zsh créé"
+        silent: true
+    status:
+      - test -f ~/.histfile
+
+  zsh:configure:add-to-shells:
+    desc: "Ajouter Zsh à la liste des shells valides"
+    cmds:
+      - echo "/home/linuxbrew/.linuxbrew/bin/zsh" | sudo tee -a /etc/shells {{.QUIET}}
+      - cmd: echo "✅ Zsh ajouté à /etc/shells"
+        silent: true
+    status:
+      - grep -q "^/home/linuxbrew/.linuxbrew/bin/zsh$" /etc/shells
+
+  zsh:configure:default-shell:
+    desc: "Définir Zsh comme shell par défaut"
+    cmds:
+      - sudo chsh -s /home/linuxbrew/.linuxbrew/bin/zsh "$USER"
+      - cmd: echo "✅ Zsh défini comme shell par défaut"
+        silent: true
+      - cmd: echo ""
+        silent: true
+      - cmd: echo "⚠️  IMPORTANT - Redémarrer le terminal pour appliquer !"
+        silent: true
+    status:
+      - grep -q "^$USER.*:/home/linuxbrew/.linuxbrew/bin/zsh$" /etc/passwd
+
+  zsh:deploy:config:
+    desc: "Déployer la configuration Zsh"
+    preconditions:
+      - sh: test -f configs/.zshrc
+        msg: "❌ Fichier configs/.zshrc introuvable."
+    cmds:
+      - cp configs/.zshrc ~/.zshrc
+      - cmd: echo "✅ .zshrc déployé"
+        silent: true
+
+  # zsh:plugins:install:
+  #   desc: "Installer les plugins Zsh avec zinit"
+  #   cmds:
+  #     - cmd: echo "📦 Installation des plugins Zsh..."
+  #       silent: true
+  #     - /home/linuxbrew/.linuxbrew/bin/zsh -c "source ~/.zshrc; exit" {{.QUIET}} &
+  #     - cmd: echo "✅ Plugins Zsh en cours d'installation (arrière-plan)"
+  #       silent: true
+
+  # ==========================================
+  # VS Code (COMMENTED)
+  # ==========================================
+
+  # vscode:main:
+  #   desc: "Configuration de VS Code pour WSL"
+  #   cmds:
+  #     - task: vscode:configure:symlink
+  #     - task: vscode:install:server
+  #     - task: vscode:extensions:symlinks
+  #     - task: vscode:extensions:install
+
+  vscode:configure:symlink:
+    desc: "Créer le symlink vers VS Code Windows"
+    cmds:
+      - sudo ln -s "/mnt/c/Users/Mathod/AppData/Local/Programs/Microsoft VS Code/bin/code" /usr/local/bin/code
+      - cmd: echo "✅ Symlink VS Code créé"
+        silent: true
+    status:
+      - test -L /usr/local/bin/code
+
+  vscode:install:server:
+    desc: "Installer VS Code Server dans WSL"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    cmds:
+      - cmd: echo "📦 Installation de VS Code Server..."
+        silent: true
+      - /usr/local/bin/code --version {{.QUIET}}
+      - cmd: echo "✅ VS Code Server installé"
+        silent: true
+    status:
+      - test -d ~/.vscode-server
+
+  # vscode:extensions:symlinks:
+  #   desc: "Créer les symlinks helm/kubectl pour VS Code Kubernetes"
+  #   cmds:
+  #     - mkdir -p ~/.local/state/vs-kubernetes/tools/helm/linux-amd64
+  #     - mkdir -p ~/.local/state/vs-kubernetes/tools/kubectl
+  #     - ln -sf /home/linuxbrew/.linuxbrew/bin/helm ~/.local/state/vs-kubernetes/tools/helm/linux-amd64/helm
+  #     - ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl ~/.local/state/vs-kubernetes/tools/kubectl/kubectl
+  #     - cmd: echo "✅ Symlinks helm/kubectl créés"
+  #       silent: true
+
+  # vscode:extensions:install:
+  #   desc: "Installer les extensions VS Code"
+  #   env:
+  #     PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+  #   vars:
+  #     EXTENSIONS:
+  #       - ms-kubernetes-tools.vscode-kubernetes-tools
+  #       - ms-kubernetes-tools.kind-vscode
+  #       - ms-azuretools.vscode-docker
+  #       - task.vscode-task
+  #       - upboundio.upbound
+  #       - redhat.vscode-yaml
+  #   cmds:
+  #     - '/usr/local/bin/code --install-extension {{.EXTENSIONS | join " --install-extension "}} {{.QUIET}}'
+  #     - cmd: echo "✅ Extensions VS Code installées"
+  #       silent: true
+
+  # ==========================================
+  # WSL (COMMENTED)
+  # ==========================================
+
+  # wsl:main:
+  #   desc: "Configuration de WSL"
+  #   cmds:
+  #     - task: wsl:configure:systemd
+
+  # wsl:configure:systemd:
+  #   desc: "Activer systemd dans WSL"
+  #   cmds:
+  #     - sudo ln -sf /home/linuxbrew/.linuxbrew/opt/systemd/lib/systemd/systemd /sbin/init
+  #     - sudo bash -c 'grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null || printf "\n[boot]\n" >> /etc/wsl.conf'
+  #     - sudo bash -c 'grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null || sed -i "/^\[boot\]/a systemd = true" /etc/wsl.conf'
+  #     - cmd: echo "✅ systemd activé - Redémarrer WSL avec 'wsl --shutdown' dans PowerShell"
+  #       silent: true
+  #   status:
+  #     - test -L /sbin/init
+  #     - grep -q "^\[boot\]" /etc/wsl.conf
+  #     - grep -q "^systemd.*=.*true" /etc/wsl.conf
+
+  # ==========================================
+  # Status
+  # ==========================================
+
+  status:
+    desc: "📊 Affiche le statut de l'environnement"
+    cmds:
+      - echo "📊 Statut de l'environnement"
+      - echo "─────────────────────────────────────────"
+      - echo ""
+      - task: status:check:brew
+      - task: status:check:zsh
+      - task: status:check:git
+      - task: status:check:secrets
+      - task: status:check:ssh
+      - task: status:check:packages
+      - echo "─────────────────────────────────────────"
+
+  status:check:brew:
+    internal: true
+    cmds:
+      - echo "🍺 Homebrew :"
+      - cmd: if command -v brew >/dev/null 2>&1; then echo "  ✅ Installé ($({{.BREW}} --version | head -1))"; else echo "  ❌ Non installé"; fi
+      - echo ""
+
+  status:check:zsh:
+    internal: true
+    cmds:
+      - echo "🐚 Zsh :"
+      - cmd: if command -v zsh >/dev/null 2>&1; then echo "  ✅ Installé ($(zsh --version))"; else echo "  ❌ Non installé"; fi
+      - echo ""
+
+  status:check:git:
+    internal: true
+    cmds:
+      - echo "🔧 Git :"
+      - cmd: if command -v git >/dev/null 2>&1; then echo "  ✅ Installé"; echo "  👤 Nom{{":"}} $(git config --global user.name 2>/dev/null || echo 'non configuré')"; echo "  📧 Email{{":"}} $(git config --global user.email 2>/dev/null || echo 'non configuré')"; else echo "  ❌ Non installé"; fi
+      - echo ""
+
+  status:check:secrets:
+    internal: true
+    cmds:
+      - echo "🔐 Secrets :"
+      - cmd: if [ -f ~/.config/sops/age/keys.txt ]; then echo "  🔓 Déverrouillés"; else echo "  🔒 Verrouillés"; fi
+      - echo ""
+
+  status:check:ssh:
+    internal: true
+    cmds:
+      - echo "🔑 SSH :"
+      - cmd: test -f ~/.ssh/config && echo "  ✅ Config SSH présent" || echo "  ❌ Config SSH manquant"
+      - cmd: test -f ~/.ssh/github && echo "  ✅ Clé GitHub présente" || echo "  ❌ Clé GitHub manquante"
+      - cmd: test -f ~/.ssh/gitlab && echo "  ✅ Clé GitLab présente" || echo "  ❌ Clé GitLab manquante"
+      - cmd: test -f ~/.ssh/seedbox && echo "  ✅ Clé Seedbox présente" || echo "  ❌ Clé Seedbox manquante"
+      - echo ""
+
+  status:check:packages:
+    internal: true
+    cmds:
+      - echo "📦 Packages Homebrew :"
+      - cmd: if command -v brew >/dev/null 2>&1; then echo "  📦 $({{.BREW}} list 2>/dev/null | wc -l) packages installés"; else echo "  ❌ Homebrew non installé"; fi
+      - echo ""
+
+  # ==========================================
+  # Aide
+  # ==========================================
+
+  help:
+    desc: "Afficher l'aide des commandes disponibles"
+    silent: true
+    cmds:
+      - echo "🚀 Taskfile Bootstrap - Commandes disponibles"
+      - echo "═══════════════════════════════════════════════════════════════════════"
+      - echo ""
+      - echo "🎯 PRINCIPALES"
+      - echo "  task                                    Bootstrap complet"
+      - echo "  task bootstrap                          Installation et configuration complète"
+      - echo "  task help                               Afficher cette aide"
+      - echo ""
+      - echo "🔐 SUDO"
+      - echo "  task sudo:main                          Authentification sudo"
+      - echo ""
+      - echo "🔑 AGE"
+      - echo "  task age:main                           Décrypter la clé age"
+      - echo "  task age:decrypt:key                    Décrypter la clé age avec passphrase"
+      - echo ""
+      - echo "🌍 LOCALES"
+      - echo "  task locales:main                       Configuration complète des locales"
+      - echo "  task locales:install:package            Installer le package locales"
+      - echo "  task locales:generate                   Générer la locale en_US.UTF-8"
+      - echo ""
+      - echo "🍺 HOMEBREW - INSTALLATION"
+      - echo "  task brew:main                          Installation complète de Homebrew"
+      - echo "  task brew:install:deps                  Installer les dépendances système"
+      - echo "  task brew:install:binary                Installer le binaire Homebrew"
+      - echo "  task brew:configure:path                Configurer le PATH pour Homebrew"
+      - echo "  task brew:analytics:off                 Désactiver la télémétrie Homebrew"
+      - echo "  task brew:install:packages              Installer les packages essentiels"
+      - echo "  task brew:verify:packages               Vérifier les installations des packages"
+      - echo ""
+      - echo "🍺 HOMEBREW - MAINTENANCE"
+      - echo "  task brew:refresh                       Maintenance complète (update + upgrade + cleanup)"
+      - echo "  task brew:update                        Mettre à jour les dépôts"
+      - echo "  task brew:upgrade                       Upgrader tous les packages"
+      - echo "  task brew:cleanup                       Nettoyer les anciennes versions"
+      - echo "  task brew:list                          Lister tous les packages"
+      - echo "  task brew:leaves                        Lister les packages installés manuellement"
+      - echo ""
+      - echo "🔐 SOPS"
+      - echo "  task sops:main                          Déployer les secrets SOPS"
+      - echo "  task sops:deploy:ssh                    Déployer les clés SSH"
+      - echo ""
+      - echo "🔧 GIT"
+      - echo "  task git:main                           Configuration complète de Git"
+      - echo "  task git:configure:user                 Configurer l'utilisateur Git global"
+      - echo ""
+      - echo "🔑 SSH"
+      - echo "  task ssh:add:keys                       Ajouter les clés SSH à l'agent"
+      - echo ""
+      - echo "🐚 ZSH"
+      - echo "  task zsh:main                           Configuration complète de Zsh"
+      - echo "  task zsh:configure:histfile             Créer le fichier d'historique"
+      - echo "  task zsh:configure:add-to-shells        Ajouter Zsh à /etc/shells"
+      - echo "  task zsh:configure:default-shell        Définir Zsh comme shell par défaut"
+      - echo "  task zsh:deploy:config                  Déployer .zshrc"
+      - echo ""
+      - echo "📊 STATUS"
+      - echo "  task status                             Afficher le statut de l'environnement"
+      - echo ""
+      - echo "═══════════════════════════════════════════════════════════════════════"
+      - echo ""
+      - echo "🔧 VARIABLES DISPONIBLES"
+      - echo "  QUIET={{.QUIET}}                        Masquer les sorties (vide par défaut)"
+      - echo "  BREW={{.BREW}}                          Chemin vers Homebrew"
+      - echo "  SOPS={{.SOPS}}                          Chemin vers SOPS"
+      - echo "  BREW_PACKAGES                           Liste des packages à installer ({{.BREW_PACKAGES | len}} packages)"
+      - echo ""
+      - echo "═══════════════════════════════════════════════════════════════════════"
+      - echo "💡 Astuce - Lance 'task --list' pour voir toutes les commandes disponibles"
