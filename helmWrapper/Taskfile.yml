@@ -193,6 +193,44 @@ tasks:
       - echo ""
       - echo "✅ Values fetch completed!"
 
+  update:check:
+    desc: "Check for available updates for all charts"
+    cmds:
+      - echo "🔍 Checking for chart updates..."
+      - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      - helm repo update >/dev/null 2>&1
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -f "{{$chart.app}}/Chart.yaml" ]; then
+          # Get current versions from wrapper
+          CURRENT_CHART="$(yq eval '.dependencies[0].version' {{$chart.app}}/Chart.yaml)"
+          CURRENT_APP="$(yq eval '.appVersion' {{$chart.app}}/Chart.yaml)"
+
+          # Get latest versions from upstream
+          CHART_NAME="{{if $chart.chart_name}}{{$chart.chart_name}}{{else}}{{$chart.app}}{{end}}"
+          UPSTREAM_INFO="$(helm show chart {{$chart.name}}/${CHART_NAME})"
+          LATEST_CHART="$(echo "$UPSTREAM_INFO" | yq '.version')"
+          LATEST_APP="$(echo "$UPSTREAM_INFO" | yq '.appVersion')"
+
+          # Check if update is available
+          if [ "$CURRENT_CHART" != "$LATEST_CHART" ] || [ "$CURRENT_APP" != "$LATEST_APP" ]; then
+            echo "🔄 {{$chart.app}}:"
+            if [ "$CURRENT_CHART" != "$LATEST_CHART" ]; then
+              echo "   Chart: $CURRENT_CHART → $LATEST_CHART"
+            fi
+            if [ "$CURRENT_APP" != "$LATEST_APP" ]; then
+              echo "   App:   $CURRENT_APP → $LATEST_APP"
+            fi
+          else
+            echo "✅ {{$chart.app}}: $CURRENT_CHART (app: $CURRENT_APP) - up to date"
+          fi
+        else
+          echo "⚠️  {{$chart.app}}: Chart.yaml not found"
+        fi
+        {{end}}
+      - echo ""
+      - echo "💡 Run 'task update:single -- <chart-name>' to update a specific chart"
+
 ###################################################################################################
 
 #  search_existing_versions:
