@@ -3,106 +3,198 @@ version: '3'
 set: [errexit, pipefail]
 
 vars:
-  HELM_REPOSITORY_NAME: '{{.HELM_REPOSITORY_NAME | default "stakater"}}'
-  HELM_REPOSITORY_URL: '{{.HELM_REPOSITORY_URL | default "https://stakater.github.io/stakater-charts"}}'
-  HELM_REPOSITORY_APP: '{{.HELM_REPOSITORY_APP | default "reloader"}}'
-
-###
+  CHARTS:
+    map:
+      kyverno:
+        name: kyverno
+        url: https://kyverno.github.io/kyverno/
+        app: kyverno
+      argo:
+        name: argo
+        url: https://argoproj.github.io/argo-helm
+        app: argo-cd
+      crossplane:
+        name: crossplane-stable
+        url: https://charts.crossplane.io/stable
+        app: crossplane
+      stakater:
+        name: stakater
+        url: https://stakater.github.io/stakater-charts
+        app: reloader
+      prometheus:
+        name: prometheus-community
+        url: https://prometheus-community.github.io/helm-charts
+        app: prometheus
 
 tasks:
   default:
-    desc: "Create helm wrapper"
+    desc: "Create helm wrappers for all charts"
+    summary: "Entry point that processes all charts defined in CHARTS map and creates wrapper directories with Chart.yaml"
     cmds:
       - task: helmWrapper:main
 
-  helmWrapper:all:
-    desc: "do all chart"
-    summary: "do all chart"
-    cmds:
-      - HELM_REPOSITORY_NAME="kyverno" HELM_REPOSITORY_URL="https://kyverno.github.io/kyverno/" HELM_REPOSITORY_APP="kyverno" task
-      - HELM_REPOSITORY_NAME="argo" HELM_REPOSITORY_URL="https://argoproj.github.io/argo-helm" HELM_REPOSITORY_APP="argo-cd" task
-      - HELM_REPOSITORY_NAME="crossplane-stable" HELM_REPOSITORY_URL="https://charts.crossplane.io/stable" HELM_REPOSITORY_APP="crossplane" task
-      - HELM_REPOSITORY_NAME="stakater" HELM_REPOSITORY_URL="https://stakater.github.io/stakater-charts" HELM_REPOSITORY_APP="reloader" task
-      - HELM_REPOSITORY_NAME="prometheus-community" HELM_REPOSITORY_URL="https://prometheus-community.github.io/helm-charts" HELM_REPOSITORY_APP="prometheus" task
-
   helmWrapper:main:
-    desc: "Run the full process (version check, update, commit, push)"
-    summary: "Runs the full process including version check, updating Chart.yaml, and committing the changes."
+    desc: "Process all configured charts"
+    summary: "Orchestrates the full workflow: checks requirements, adds Helm repos, updates them, and processes all charts"
     aliases: [setup, init]
     cmds:
       - task: required:check
-      - task: helm:repositories:add
+      - task: helm:repositories:add:all
       - task: helm:repositories:update
-      - task: copy:templateDirectory
-      - task: update-chart
+      - task: helmWrapper:process:all
 
   required:check:
+    desc: "Verify required CLI tools"
+    summary: "Checks that helm, yq, and git are installed on the system before proceeding"
+    internal: true
     cmds:
-      - "command -v helm || { echo 'helm could not be found. Please install helm.'; exit 1; }"
-      - "command -v yq || { echo 'yq could not be found. Please install yq.'; exit 1; }"
-      - "command -v git || { echo 'git could not be found. Please install git.'; exit 1; }"
+      - command -v helm >/dev/null 2>&1 && echo "✅ Helm" || { echo "❌ helm could not be found. Please install helm."; exit 1; }
+      - command -v yq   >/dev/null 2>&1 && echo "✅ yq"   || { echo "❌ yq could not be found. Please install yq."; exit 1; }
+      - command -v git  >/dev/null 2>&1 && echo "✅ git"  || { echo "❌ git could not be found. Please install git."; exit 1; }
 
-  helm:repositories:add:
-    desc: "Add Helm repositories"
-    summary: "Adds Helm repositories defined in the HELM_REPOSITORY_NAME and HELM_REPOSITORY_URL variables"
-    preconditions:
-      - sh: command -v helm >/dev/null 2>&1
-        msg: "❌ Helm n'est pas installé. Exécutez 'task brew:main' d'abord."
-    requires:
-      vars: [HELM_REPOSITORY_NAME, HELM_REPOSITORY_URL]
-    cmds:
-      - 'helm repo add {{.HELM_REPOSITORY_NAME}} {{.HELM_REPOSITORY_URL}}'
-
-  helm:repositories:update:
-    desc: "Update Helm repositories"
-    summary: ""
-    cmds:
-      - helm repo update
-      - cmd: echo "✅ Tous les repositories sont mis à jour."
-        silent: true
-
-  copy:templateDirectory:
-    desc: Copie le répertoire "config" dans un répertoire basé sur HELM_REPOSITORY_APP
-    cmds:
-      - mkdir -p {{.HELM_REPOSITORY_APP}}  # Crée le répertoire de destination
-      - cp -r config/* {{.HELM_REPOSITORY_APP}}/  # Copie tout le contenu de "config"
-      - cmd: echo "✅ Le répertoire 'config' a été copié dans {{.HELM_REPOSITORY_APP}}"
-        silent: true
-
-  update-chart:
-    desc: "Met à jour le Chart.yaml avec les informations du chart Helm"
-    summary: "Récupère les informations du chart Helm et met à jour le Chart.yaml en conséquence."
-    requires:
-      vars: [HELM_REPOSITORY_NAME, HELM_REPOSITORY_APP, HELM_REPOSITORY_URL]
-    dir: "{{.HELM_REPOSITORY_APP}}"
+  helm:repositories:add:all:
+    desc: "Add all Helm repositories"
+    summary: "Iterates through CHARTS map and adds each repository to Helm, skipping if already exists"
+    internal: true
     cmds:
       - |
-        HELM_CHART="$(helm show chart {{.HELM_REPOSITORY_NAME}}/{{.HELM_REPOSITORY_APP}})"
+        {{range $key, $chart := .CHARTS}}
+        echo "➕ Adding repository: {{$chart.name}}"
+        helm repo add "{{$chart.name}}" "{{$chart.url}}" 2>/dev/null || echo "ℹ️  Repository {{$chart.name}} already exists"
+        {{end}}
+        echo "✅ All repositories added"
 
+  helm:repositories:update:
+    desc: "Update all Helm repositories"
+    summary: "Refreshes the local cache of all added Helm repositories to fetch latest chart versions"
+    internal: true
+    cmds:
+      - helm repo update
+      - cmd: echo "✅ Repositories updated"
+        silent: true
+
+  helmWrapper:process:all:
+    desc: "Process and create wrappers for all charts"
+    summary: "Loops through all charts: copies config template, fetches chart metadata from Helm, and generates Chart.yaml wrapper"
+    internal: true
+    preconditions:
+      - sh: '[ -d "config" ]'
+        msg: "❌ Config directory not found. Please ensure 'config' directory exists with template files."
+    cmds:
+      - |
+        {{range $key, $chart := .CHARTS}}
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🔄 Processing chart: {{$chart.app}}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Copy template directory
+        mkdir -p "{{$chart.app}}"
+        rm -rf "{{$chart.app}}"/*
+        cp -r config/* "{{$chart.app}}/"
+        echo "📁 Config copied to {{$chart.app}}"
+        
+        # Update Chart.yaml
+        cd "{{$chart.app}}"
+        HELM_CHART="$(helm show chart {{$chart.name}}/{{$chart.app}})"
+        
         export HELM_CHART_VERSION="$(echo "$HELM_CHART" | yq '.version')"
         export HELM_APP_VERSION="$(echo "$HELM_CHART" | yq '.appVersion')"
         export HELM_SOURCES="$(echo "$HELM_CHART" | yq '.sources[0]')"
-
+        
         yq -i '
-          .name = "{{.HELM_REPOSITORY_APP}}-wrapper" |
-          .description = "Wrapper for {{.HELM_REPOSITORY_NAME}} {{.HELM_REPOSITORY_APP}}" |
+          .name = "{{$chart.app}}-wrapper" |
+          .description = "Wrapper for {{$chart.name}} {{$chart.app}}" |
           .type = "application" |
           .version = "1.0.0" |
           .appVersion = strenv(HELM_APP_VERSION) |
           .maintainers = [{"name":"Mathod"}] |
           .dependencies = [{
-            "name":"{{.HELM_REPOSITORY_APP}}",
+            "name":"{{$chart.app}}",
             "version": strenv(HELM_CHART_VERSION),
-            "repository":"{{.HELM_REPOSITORY_URL}}"
+            "repository":"{{$chart.url}}"
           }] |
           .sources = [strenv(HELM_SOURCES)]
         ' Chart.yaml
+        
+        echo "📝 Chart.yaml updated (version: $HELM_CHART_VERSION, appVersion: $HELM_APP_VERSION)"
+        cd ..
+        
+        echo "✅ {{$chart.app}} wrapper created successfully"
+        {{end}}
+        echo ""
+        echo "🎉 All chart wrappers have been created!"
 
-#
-#  get_current_version:
-#    cmds:
-#      - "current_version=$(yq eval '.version' cnpg/Chart.yaml)"
-#
+  clean:
+    desc: "Remove all generated chart wrapper directories"
+    summary: "Deletes all chart directories created by the wrapper process, based on the CHARTS map configuration"
+    cmds:
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -d "{{$chart.app}}" ]; then
+          echo "🗑️  Removing {{$chart.app}}/"
+          rm -rf "{{$chart.app}}"
+        fi
+        {{end}}
+        echo "✅ Cleanup completed!"
+
+  current_version:
+    desc: "Get upstream chart versions for all wrappers"
+    summary: "Reads dependencies[0].version from each Chart.yaml"
+    cmds:
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ ! -f "{{$chart.app}}/Chart.yaml" ]; then
+          echo "❌ {{$chart.app}}/Chart.yaml not found"
+          exit 1
+        fi
+
+        CHART_VERSION="$(yq eval '.dependencies[0].version' {{$chart.app}}/Chart.yaml)"
+        echo "📦 {{$chart.app}}: ${CHART_VERSION}"
+        {{end}}
+
+  values:fetch:
+    desc: "Fetch official values.yaml as examples for all wrappers"
+    summary: "Downloads upstream default values and saves them in values.example files"
+    cmds:
+      - echo "📋 Fetching official values for all chart wrappers..."
+      - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -d "{{$chart.app}}" ] && [ -f "{{$chart.app}}/values.example" ]; then
+          echo -n "📦 {{$chart.app}}: "
+          
+          # Determine chart name
+          CHART_NAME="{{if $chart.chart_name}}{{$chart.chart_name}}{{else}}{{$chart.app}}{{end}}"
+          
+          # Create a backup to work with
+          cp "{{$chart.app}}/values.example" "{{$chart.app}}/values.example.tmp"
+          
+          # Replace placeholders
+          sed -i "s|CHART_APP_NAME|{{$chart.app}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_URL|{{$chart.url}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_REPO|{{$chart.name}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_NAME|${CHART_NAME}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|GENERATED_DATE|$(date '+%Y-%m-%d %H:%M:%S')|g" "{{$chart.app}}/values.example.tmp"
+          
+          # Move the processed header to final file
+          mv "{{$chart.app}}/values.example.tmp" "{{$chart.app}}/values.example"
+          
+          # Append the actual values
+          if helm show values "{{$chart.name}}/${CHART_NAME}" >> "{{$chart.app}}/values.example" 2>/dev/null; then
+            echo "✅ Done"
+          else
+            echo "❌ Failed to fetch values"
+          fi
+        else
+          echo "⚠️  {{$chart.app}}: Directory or values.example not found"
+        fi
+        {{end}}
+      - echo ""
+      - echo "✅ Values fetch completed!"
+
+###################################################################################################
+
 #  search_existing_versions:
 #    cmds:
 #      - "echo 'No new version provided. Searching the repository for existing versions...'"
@@ -147,5 +239,3 @@ tasks:
 #      - "git commit -m 'Changed version $new_version and appVersion $app_version'"
 #      - "git tag $new_version"
 #      - "git push origin $new_version --tags"
-
-
