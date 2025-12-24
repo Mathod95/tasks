@@ -152,3 +152,43 @@ tasks:
         CHART_VERSION="$(yq eval '.dependencies[0].version' {{$chart.app}}/Chart.yaml)"
         echo "📦 {{$chart.app}}: ${CHART_VERSION}"
         {{end}}
+
+  values:fetch:
+    desc: "Fetch official values.yaml as examples for all wrappers"
+    summary: "Downloads upstream default values and saves them in values.example files"
+    cmds:
+      - echo "📋 Fetching official values for all chart wrappers..."
+      - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -d "{{$chart.app}}" ] && [ -f "{{$chart.app}}/values.example" ]; then
+          echo -n "📦 {{$chart.app}}: "
+          
+          # Determine chart name
+          CHART_NAME="{{if $chart.chart_name}}{{$chart.chart_name}}{{else}}{{$chart.app}}{{end}}"
+          
+          # Create a backup to work with
+          cp "{{$chart.app}}/values.example" "{{$chart.app}}/values.example.tmp"
+          
+          # Replace placeholders
+          sed -i "s|CHART_APP_NAME|{{$chart.app}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_URL|{{$chart.url}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_REPO|{{$chart.name}}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|CHART_NAME|${CHART_NAME}|g" "{{$chart.app}}/values.example.tmp"
+          sed -i "s|GENERATED_DATE|$(date '+%Y-%m-%d %H:%M:%S')|g" "{{$chart.app}}/values.example.tmp"
+          
+          # Move the processed header to final file
+          mv "{{$chart.app}}/values.example.tmp" "{{$chart.app}}/values.example"
+          
+          # Append the actual values
+          if helm show values "{{$chart.name}}/${CHART_NAME}" >> "{{$chart.app}}/values.example" 2>/dev/null; then
+            echo "✅ Done"
+          else
+            echo "❌ Failed to fetch values"
+          fi
+        else
+          echo "⚠️  {{$chart.app}}: Directory or values.example not found"
+        fi
+        {{end}}
+      - echo ""
+      - echo "✅ Values fetch completed!"
