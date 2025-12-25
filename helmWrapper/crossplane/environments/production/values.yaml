@@ -1,0 +1,69 @@
+# Configuration Crossplane pour Production
+crossplane:
+  resourcesCrossplane:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 1
+      memory: 1Gi
+
+  rbacManager:
+    deploy: true
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# Providers AWS pour Production
+providers:
+  - name: upbound-provider-aws-s3
+    package: xpkg.upbound.io/upbound/provider-aws-s3:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-eks
+    package: xpkg.upbound.io/upbound/provider-aws-eks:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-ec2
+    package: xpkg.upbound.io/upbound/provider-aws-ec2:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-iam
+    package: xpkg.upbound.io/upbound/provider-aws-iam:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-rds
+    package: xpkg.upbound.io/upbound/provider-aws-rds:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-lambda
+    package: xpkg.upbound.io/upbound/provider-aws-lambda:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-vpc
+    package: xpkg.upbound.io/upbound/provider-aws-vpc:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-cloudfront
+    package: xpkg.upbound.io/upbound/provider-aws-cloudfront:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-route53
+    package: xpkg.upbound.io/upbound/provider-aws-route53:v2.3.0
+    enabled: true
+
+aws:
+  region: eu-west-1
+
+# ControllerConfig pour optimiser les performances
+controllerConfig:
+  enabled: true
+  debug: false
+  maxReconcileRate: 20
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+# Ne pas créer le secret via Helm (utiliser External Secrets)
+awsCredentials:
+  create: false

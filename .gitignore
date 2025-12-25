@@ -1,6 +1,6 @@
 # helmWrapper
 helmWrapper/argo-cd
-helmWrapper/crossplane
+#helmWrapper/crossplane
 helmWrapper/kyverno
 helmWrapper/prometheus
 helmWrapper/reloader

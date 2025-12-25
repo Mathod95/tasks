@@ -1,0 +1,58 @@
+# Configuration par défaut du chart Crossplane
+crossplane:
+  enabled: true
+  
+  # Configuration des ressources pour Crossplane
+  resourcesCrossplane:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Configuration RBAC Manager
+  rbacManager:
+    deploy: true
+    resources:
+      limits:
+        cpu: 100m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+# Liste des providers AWS à installer
+providers: []  # Override par environnement
+
+# Configuration AWS
+aws:
+  region: eu-west-1  # Région par défaut
+
+# Configuration du provider AWS
+providerConfig:
+  aws:
+    credentials:
+      source: Secret
+      secretRef:
+        namespace: crossplane-system
+        name: aws-credentials
+        key: credentials
+
+# ControllerConfig pour optimiser les ressources des providers
+controllerConfig:
+  enabled: false  # Override par environnement
+  debug: false
+  maxReconcileRate: 10
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+# Gestion du secret AWS (utiliser External Secrets en production)
+awsCredentials:
+  create: false  # Ne pas créer via Helm en production
+  credentials: ""  # Will be set via sealed-secrets or external-secrets

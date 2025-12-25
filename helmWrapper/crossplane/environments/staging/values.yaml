@@ -1,0 +1,56 @@
+# Configuration Crossplane pour Staging
+crossplane:
+  resourcesCrossplane:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  rbacManager:
+    deploy: true
+    resources:
+      limits:
+        cpu: 100m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+# Providers AWS pour Staging (subset de production)
+providers:
+  - name: upbound-provider-aws-s3
+    package: xpkg.upbound.io/upbound/provider-aws-s3:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-eks
+    package: xpkg.upbound.io/upbound/provider-aws-eks:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-ec2
+    package: xpkg.upbound.io/upbound/provider-aws-ec2:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-iam
+    package: xpkg.upbound.io/upbound/provider-aws-iam:v2.3.0
+    enabled: true
+  - name: upbound-provider-aws-vpc
+    package: xpkg.upbound.io/upbound/provider-aws-vpc:v2.3.0
+    enabled: true
+
+aws:
+  region: eu-west-1
+
+# ControllerConfig avec moins de ressources
+controllerConfig:
+  enabled: true
+  debug: true  # Debug activé en staging
+  maxReconcileRate: 10
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+awsCredentials:
+  create: false

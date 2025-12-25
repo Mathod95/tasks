@@ -1,0 +1,29 @@
+{{- $awsProviders := list "upbound-provider-aws-s3" "upbound-provider-aws-eks" "upbound-provider-aws-ec2" "upbound-provider-aws-iam" "upbound-provider-aws-rds" "upbound-provider-aws-lambda" "upbound-provider-aws-vpc" "upbound-provider-aws-cloudfront" "upbound-provider-aws-route53" }}
+{{- $providerFound := false }}
+{{- range .Values.providers }}
+  {{- if and .enabled (has .name $awsProviders) }}
+    {{- $providerFound = true }}
+  {{- end }}
+{{- end }}
+
+{{- if $providerFound }}
+---
+apiVersion: aws.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+  namespace: crossplane-system
+  labels:
+    app.kubernetes.io/name: provider-config-aws
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: provider-config
+spec:
+  region: {{ .Values.aws.region }}
+  credentials:
+    source: {{ .Values.providerConfig.aws.credentials.source }}
+    secretRef:
+      namespace: {{ .Values.providerConfig.aws.credentials.secretRef.namespace }}
+      name: {{ .Values.providerConfig.aws.credentials.secretRef.name }}
+      key: {{ .Values.providerConfig.aws.credentials.secretRef.key }}
+{{- end }}

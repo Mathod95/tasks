@@ -1,0 +1,14 @@
+apiVersion: v2
+name: crossplane-wrapper
+description: Wrapper for crossplane-stable crossplane
+type: application
+version: 1.0.0
+appVersion: "2.1.3"
+maintainers:
+  - name: Mathod
+dependencies:
+  - name: crossplane
+    version: 2.1.3
+    repository: https://charts.crossplane.io/stable
+sources:
+  - https://github.com/crossplane/crossplane

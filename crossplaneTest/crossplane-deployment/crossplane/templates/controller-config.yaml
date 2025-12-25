@@ -1,0 +1,29 @@
+{{- if .Values.controllerConfig.enabled }}
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: aws-controller-config
+  namespace: crossplane-system
+  labels:
+    app.kubernetes.io/name: controller-config
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: controller-config
+spec:
+  args:
+    - --debug={{ .Values.controllerConfig.debug }}
+    - --max-reconcile-rate={{ .Values.controllerConfig.maxReconcileRate }}
+  resources:
+    limits:
+      cpu: {{ .Values.controllerConfig.resources.limits.cpu }}
+      memory: {{ .Values.controllerConfig.resources.limits.memory }}
+    requests:
+      cpu: {{ .Values.controllerConfig.resources.requests.cpu }}
+      memory: {{ .Values.controllerConfig.resources.requests.memory }}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+{{- end }}
