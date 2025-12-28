@@ -9,6 +9,9 @@ export PATH="/home/linuxbrew/.linuxbrew/sbin:$PATH"
 # LANG
 export LANG=en_US.utf8
 
+# COMPLETION
+fpath=(/home/linuxbrew/.linuxbrew/share/zsh/site-functions $fpath)
+
 # BIND
 bindkey -e                       # Use Emacs-style keybindings in the shell
 bindkey "^[[3~" delete-char      # Map Delete key to delete-char
@@ -30,7 +33,7 @@ setopt HIST_VERIFY               # Show history-expanded command before running 
 
 # OTHER
 HISTFILE=~/.histfile
-HISTSIZE=1000
+HISTSIZE=10000
 SAVEHIST=100000
 
 # ALIASES
