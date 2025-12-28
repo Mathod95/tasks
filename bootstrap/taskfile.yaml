@@ -131,8 +131,8 @@ tasks:
       - chmod 600 ~/.config/sops/age/keys.txt
       - cmd: echo "✅ Clé age décryptée"
         silent: true
-      - defer: echo "🔒 Clé age supprimée"
-      - defer: rm -f ~/.config/sops/age/keys.txt
+      #- defer: echo "🔒 Clé age supprimée"
+      #- defer: rm -f ~/.config/sops/age/keys.txt
     status:
       - test -f ~/.config/sops/age/keys.txt
 
