@@ -362,12 +362,12 @@ tasks:
 
 # SSH #############################################################################################
 
-  # ssh:configure:agent:
-  #   desc: "Configurer le démarrage automatique de l'agent SSH"
-  #   cmds:
-  #     - cmd: echo "🔧 Configuration de l'agent SSH..."
-  #       silent: true
-  #     - bash -c 'cat >> ~/.bashrc << "EOF"
+  #ssh:configure:agent:
+  #  desc: "Configurer le démarrage automatique de l'agent SSH"
+  #  cmds:
+  #    - cmd: echo "🔧 Configuration de l'agent SSH..."
+  #      silent: true
+  #    - bash -c 'cat >> ~/.bashrc << "EOF"
 
   # # Agent SSH - Démarrage automatique
   # if [ -z "$SSH_AUTH_SOCK" ]; then
@@ -455,13 +455,13 @@ tasks:
 
 # VS Code #########################################################################################
 
-  # vscode:main:
-  #   desc: "Configuration de VS Code pour WSL"
-  #   cmds:
-  #     - task: vscode:configure:symlink
-  #     - task: vscode:install:server
-  #     - task: vscode:extensions:symlinks
-  #     - task: vscode:extensions:install
+  vscode:main:
+    desc: "Configuration de VS Code pour WSL"
+    cmds:
+      - task: vscode:configure:symlink
+  #    - task: vscode:install:server
+  #    - task: vscode:extensions:symlinks
+  #    - task: vscode:extensions:install
 
   vscode:configure:symlink:
     desc: "Créer le symlink vers VS Code Windows"
@@ -485,32 +485,32 @@ tasks:
     status:
       - test -d ~/.vscode-server
 
-  # vscode:extensions:symlinks:
-  #   desc: "Créer les symlinks helm/kubectl pour VS Code Kubernetes"
-  #   cmds:
-  #     - mkdir -p ~/.local/state/vs-kubernetes/tools/helm/linux-amd64
-  #     - mkdir -p ~/.local/state/vs-kubernetes/tools/kubectl
-  #     - ln -sf /home/linuxbrew/.linuxbrew/bin/helm ~/.local/state/vs-kubernetes/tools/helm/linux-amd64/helm
-  #     - ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl ~/.local/state/vs-kubernetes/tools/kubectl/kubectl
-  #     - cmd: echo "✅ Symlinks helm/kubectl créés"
-  #       silent: true
+  vscode:extensions:symlinks:
+    desc: "Créer les symlinks helm/kubectl pour VS Code Kubernetes"
+    cmds:
+      - mkdir -p ~/.local/state/vs-kubernetes/tools/helm/linux-amd64
+      - mkdir -p ~/.local/state/vs-kubernetes/tools/kubectl
+      - ln -sf /home/linuxbrew/.linuxbrew/bin/helm ~/.local/state/vs-kubernetes/tools/helm/linux-amd64/helm
+      - ln -sf /home/linuxbrew/.linuxbrew/bin/kubectl ~/.local/state/vs-kubernetes/tools/kubectl/kubectl
+      - cmd: echo "✅ Symlinks helm/kubectl créés"
+        silent: true
 
-  # vscode:extensions:install:
-  #   desc: "Installer les extensions VS Code"
-  #   env:
-  #     PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
-  #   vars:
-  #     EXTENSIONS:
-  #       - ms-kubernetes-tools.vscode-kubernetes-tools
-  #       - ms-kubernetes-tools.kind-vscode
-  #       - ms-azuretools.vscode-docker
-  #       - task.vscode-task
-  #       - upboundio.upbound
-  #       - redhat.vscode-yaml
-  #   cmds:
-  #     - '/usr/local/bin/code --install-extension {{.EXTENSIONS | join " --install-extension "}} {{.QUIET}}'
-  #     - cmd: echo "✅ Extensions VS Code installées"
-  #       silent: true
+  vscode:extensions:install:
+    desc: "Installer les extensions VS Code"
+    env:
+      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    vars:
+      EXTENSIONS:
+        - ms-kubernetes-tools.vscode-kubernetes-tools
+        - ms-kubernetes-tools.kind-vscode
+        - ms-azuretools.vscode-docker
+        - task.vscode-task
+        - upboundio.upbound
+        - redhat.vscode-yaml
+    cmds:
+      - '/usr/local/bin/code --install-extension {{.EXTENSIONS | join " --install-extension "}} {{.QUIET}}'
+      - cmd: echo "✅ Extensions VS Code installées"
+        silent: true
 
 # WSL #############################################################################################
 
@@ -519,18 +519,18 @@ tasks:
     cmds:
       - task: wsl:configure:systemd
 
-  # wsl:configure:systemd:
-  #   desc: "Activer systemd dans WSL"
-  #   cmds:
-  #     - sudo ln -sf /home/linuxbrew/.linuxbrew/opt/systemd/lib/systemd/systemd /sbin/init
-  #     - sudo bash -c 'grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null || printf "\n[boot]\n" >> /etc/wsl.conf'
-  #     - sudo bash -c 'grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null || sed -i "/^\[boot\]/a systemd = true" /etc/wsl.conf'
-  #     - cmd: echo "✅ systemd activé - Redémarrer WSL avec 'wsl --shutdown' dans PowerShell"
-  #       silent: true
-  #   status:
-  #     - test -L /sbin/init
-  #     - grep -q "^\[boot\]" /etc/wsl.conf
-  #     - grep -q "^systemd.*=.*true" /etc/wsl.conf
+  wsl:configure:systemd:
+    desc: "Activer systemd dans WSL"
+    cmds:
+      - sudo ln -sf /home/linuxbrew/.linuxbrew/opt/systemd/lib/systemd/systemd /sbin/init
+      - sudo bash -c 'grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null || printf "\n[boot]\n" >> /etc/wsl.conf'
+      - sudo bash -c 'grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null || sed -i "/^\[boot\]/a systemd = true" /etc/wsl.conf'
+      - cmd: echo "✅ systemd activé - Redémarrer WSL avec 'wsl --shutdown' dans PowerShell"
+        silent: true
+    status:
+      - test -L /sbin/init
+      - grep -q "^\[boot\]" /etc/wsl.conf
+      - grep -q "^systemd.*=.*true" /etc/wsl.conf
 
 # STATUS ##########################################################################################
 
