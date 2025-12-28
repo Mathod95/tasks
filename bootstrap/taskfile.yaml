@@ -71,7 +71,7 @@ tasks:
       - task: git:main
       - task: zsh:main
       # - task: vscode:main
-      - task: wsl:main
+      # - task: wsl:main
       - task: status
       - cmd: echo "✅ Bootstrap terminé !"
         silent: true
@@ -176,7 +176,7 @@ tasks:
       - task: brew:configure:path
       - task: brew:analytics:off
       - task: brew:install:packages
-      #- task: brew:verify:packages
+      - task: brew:verify:packages
 
   brew:install:deps:
     desc: "Installer les dépendances système requises"
@@ -519,18 +519,18 @@ tasks:
     cmds:
       - task: wsl:configure:systemd
 
-  wsl:configure:systemd:
-    desc: "Activer systemd dans WSL"
-    cmds:
-      - sudo ln -sf /home/linuxbrew/.linuxbrew/opt/systemd/lib/systemd/systemd /sbin/init
-      - sudo bash -c 'grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null || printf "\n[boot]\n" >> /etc/wsl.conf'
-      - sudo bash -c 'grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null || sed -i "/^\[boot\]/a systemd = true" /etc/wsl.conf'
-      - cmd: echo "✅ systemd activé - Redémarrer WSL avec 'wsl --shutdown' dans PowerShell"
-        silent: true
-    status:
-      - test -L /sbin/init
-      - grep -q "^\[boot\]" /etc/wsl.conf
-      - grep -q "^systemd.*=.*true" /etc/wsl.conf
+  # wsl:configure:systemd:
+  #   desc: "Activer systemd dans WSL"
+  #   cmds:
+  #     - sudo ln -sf /home/linuxbrew/.linuxbrew/opt/systemd/lib/systemd/systemd /sbin/init
+  #     - sudo bash -c 'grep -q "^\[boot\]" /etc/wsl.conf 2>/dev/null || printf "\n[boot]\n" >> /etc/wsl.conf'
+  #     - sudo bash -c 'grep -q "^systemd.*=.*true" /etc/wsl.conf 2>/dev/null || sed -i "/^\[boot\]/a systemd = true" /etc/wsl.conf'
+  #     - cmd: echo "✅ systemd activé - Redémarrer WSL avec 'wsl --shutdown' dans PowerShell"
+  #       silent: true
+  #   status:
+  #     - test -L /sbin/init
+  #     - grep -q "^\[boot\]" /etc/wsl.conf
+  #     - grep -q "^systemd.*=.*true" /etc/wsl.conf
 
 # STATUS ##########################################################################################
 
