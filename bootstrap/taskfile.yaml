@@ -397,10 +397,10 @@ tasks:
     run: once
     cmds:
       - task: zsh:configure:histfile
-      - task: zsh:configure:add-to-shells
+      - task: zsh:configure:add-shells
       - task: zsh:configure:default-shell
       - task: zsh:deploy:config
-      # - task: zsh:installplugins
+      # - task: zsh:install:plugins
 
   zsh:configure:histfile:
     desc: "Créer le fichier d'historique Zsh"
@@ -412,7 +412,7 @@ tasks:
     status:
       - test -f ~/.histfile
 
-  zsh:configure:add-to-shells:
+  zsh:configure:add-shells:
     desc: "Ajouter Zsh à la liste des shells valides"
     cmds:
       - echo "/home/linuxbrew/.linuxbrew/bin/zsh" | sudo tee -a /etc/shells {{.QUIET}}
@@ -452,6 +452,8 @@ tasks:
       - /home/linuxbrew/.linuxbrew/bin/zsh -c "source ~/.zshrc; exit" {{.QUIET}} &
       - cmd: echo "✅ Plugins Zsh en cours d'installation (arrière-plan)"
         silent: true
+
+  #zsh:plugins:configure:zabbr:
 
 # VS Code #########################################################################################
 
