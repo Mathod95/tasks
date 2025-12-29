@@ -63,6 +63,9 @@ tasks:
     desc: "Installation et configuration complète"
     aliases: [setup, init]
     cmds:
+      - echo "BOOTSTRAP"
+      - echo "─────────────────────────────────────────"
+      - echo ""
       - task: sudo:main
       - task: age:main
       - task: locales:main
@@ -72,6 +75,7 @@ tasks:
       - task: zsh:main
       - task: vscode:main
       #- task: wsl:main
+      - echo "─────────────────────────────────────────"
       - task: status
       - cmd: echo "✅ Bootstrap terminé !"
         silent: true
@@ -458,14 +462,14 @@ tasks:
         silent: true
 
   zsh:configure:abbr:
-    desc: "Abbbr"
+    desc: "Abbr"
     preconditions:
       - sh: test -f configs/user-abbreviations
-        msg: "❌ Fichier configs/config.kdl introuvable."
+        msg: "❌ Fichier configs/user-abbreviations introuvable."
     cmds:
       - mkdir -p ~/.config/zsh-abbr/
       - cp configs/user-abbreviations ~/.config/zsh-abbr/user-abbreviations
-      - cmd: echo "✅ config.kdl déployé"
+      - cmd: echo "✅ user-abbreviations déployé"
         silent: true
 
   zsh:configure:p10k:
@@ -495,9 +499,9 @@ tasks:
     desc: "Configuration de VS Code pour WSL"
     cmds:
       - task: vscode:configure:symlink
-  #    - task: vscode:install:server
-  #    - task: vscode:extensions:symlinks
-  #    - task: vscode:extensions:install
+      - task: vscode:install:server
+      - task: vscode:extensions:symlinks
+      - task: vscode:extensions:install
 
   vscode:configure:symlink:
     desc: "Créer le symlink vers VS Code Windows"
@@ -508,14 +512,30 @@ tasks:
     status:
       - test -L /usr/local/bin/code
 
+  #vscode:install:server:
+  #  desc: "Installer VS Code Server dans WSL"
+  #  env:
+  #    PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+  #  cmds:
+  #    - cmd: echo "📦 Installation de VS Code Server..."
+  #      silent: true
+  #    - /usr/local/bin/code --version {{.QUIET}}
+  #    - cmd: echo "✅ VS Code Server installé"
+  #      silent: true
+  #  status:
+  #    - test -d ~/.vscode-server
+
   vscode:install:server:
     desc: "Installer VS Code Server dans WSL"
-    env:
-      PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
+    vars:
+      TMP_BIN: /tmp/vscode-temp-bin
     cmds:
       - cmd: echo "📦 Installation de VS Code Server..."
         silent: true
-      - /usr/local/bin/code --version {{.QUIET}}
+      - defer: rm -rf {{.TMP_BIN}}  # Nettoyage garanti
+      - mkdir -p {{.TMP_BIN}}
+      - ln -sf /home/linuxbrew/.linuxbrew/bin/wget {{.TMP_BIN}}/wget
+      - PATH="{{.TMP_BIN}}:$PATH" /usr/local/bin/code --version {{.QUIET}}
       - cmd: echo "✅ VS Code Server installé"
         silent: true
     status:
@@ -543,6 +563,7 @@ tasks:
         - task.vscode-task
         - upboundio.upbound
         - redhat.vscode-yaml
+        - github.copilot
     cmds:
       - '/usr/local/bin/code --install-extension {{.EXTENSIONS | join " --install-extension "}} {{.QUIET}}'
       - cmd: echo "✅ Extensions VS Code installées"
