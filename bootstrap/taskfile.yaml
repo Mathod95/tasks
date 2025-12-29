@@ -466,6 +466,16 @@ tasks:
       - cmd: echo "✅ config.kdl déployé"
         silent: true
 
+  zsh:configure:p10k:
+    desc: "p10k"
+    preconditions:
+      - sh: test -f configs/.p10k.zsh
+        msg: "❌ Fichier configs/.p10k.zsh introuvable."
+    cmds:
+      - cp configs/.p10k.zsh ~/.p10k.zsh
+      - cmd: echo "✅ .p10k.zsh déployé"
+        silent: true
+
   zsh:install:plugins:
     desc: "Installer les plugins Zsh avec zinit"
     cmds:
