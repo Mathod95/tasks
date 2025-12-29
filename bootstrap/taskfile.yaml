@@ -474,47 +474,6 @@ tasks:
       - cmd: echo "✅ user-abbreviations déployé"
         silent: true
 
-  #zsh:configure:p10k:
-  #  desc: "p10k"
-  #  preconditions:
-  #    - sh: test -f configs/.p10k.zsh
-  #      msg: "❌ Fichier configs/.p10k.zsh introuvable."
-  #  cmds:
-  #    - cp configs/.p10k.zsh ~/.p10k.zsh
-  #    - cmd: echo "✅ .p10k.zsh déployé"
-  #      silent: true
-
-  #zsh:install:plugins:
-  #  desc: "Install Zsh plugins with zinit (silent)"
-  #  cmds:
-  #    - cmd: echo "📦 Installing Zsh plugins..."
-  #      silent: true
-  #    - cd /tmp && /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
-  #    - cmd: echo "✅ Zsh plugins installed"
-  #      silent: true
-
-  zsh:install:plugins:
-    desc: "Install Zsh plugins with zinit"
-    cmds:
-      - cmd: echo "📦 Installing Zsh plugins..."
-        silent: true
-      # Sauvegarder la config actuelle si elle existe
-      - test -f ~/.p10k.zsh && mv ~/.p10k.zsh ~/.p10k.zsh.bak || true
-      # Créer une config p10k minimale qui désactive tout
-      - |
-        cat > ~/.p10k.zsh << 'EOF'
-        # Minimal p10k config for plugin installation
-        typeset -g POWERLEVEL9K_VCS_DISABLED_WORKDIR_PATTERN='*'
-        typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
-        typeset -g POWERLEVEL9K_DISABLE_GITSTATUS=true
-        EOF
-      # Installer les plugins
-      - /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
-      # Restaurer la vraie config
-      - test -f ~/.p10k.zsh.bak && mv ~/.p10k.zsh.bak ~/.p10k.zsh || true
-      - cmd: echo "✅ Zsh plugins installed"
-        silent: true
-
   zsh:configure:p10k:
     desc: "p10k"
     preconditions:
@@ -523,6 +482,15 @@ tasks:
     cmds:
       - cp configs/.p10k.zsh ~/.p10k.zsh
       - cmd: echo "✅ .p10k.zsh déployé"
+        silent: true
+
+  zsh:install:plugins:
+    desc: "Install Zsh plugins with zinit (silent)"
+    cmds:
+      - cmd: echo "📦 Installing Zsh plugins..."
+        silent: true
+      - cd /tmp && /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
+      - cmd: echo "✅ Zsh plugins installed"
         silent: true
 
   #zsh:install:plugins:
