@@ -452,6 +452,7 @@ tasks:
       - sh: test -f configs/config.kdl
         msg: "❌ Fichier configs/config.kdl introuvable."
     cmds:
+      - mkdir -p ~/.config/zellij/
       - cp configs/config.kdl ~/.config/zellij/config.kdl
       - cmd: echo "✅ config.kdl déployé"
         silent: true
@@ -462,6 +463,7 @@ tasks:
       - sh: test -f configs/user-abbreviations
         msg: "❌ Fichier configs/config.kdl introuvable."
     cmds:
+      - mkdir -p ~/.config/zsh-abbr/
       - cp configs/user-abbreviations ~/.config/zsh-abbr/user-abbreviations
       - cmd: echo "✅ config.kdl déployé"
         silent: true
