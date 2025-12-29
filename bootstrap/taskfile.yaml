@@ -484,25 +484,25 @@ tasks:
       - cmd: echo "✅ .p10k.zsh déployé"
         silent: true
 
-  zsh:install:plugins:
-    desc: "Install Zsh plugins with zinit (silent)"
-    cmds:
-      - cmd: echo "📦 Installing Zsh plugins..."
-        silent: true
-      - cd /tmp && /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
-      - cmd: echo "✅ Zsh plugins installed"
-        silent: true
-
   #zsh:install:plugins:
-  #  desc: "Install Zsh plugins with zinit (interactive)"
+  #  desc: "Install Zsh plugins with zinit (silent)"
   #  cmds:
   #    - cmd: echo "📦 Installing Zsh plugins..."
   #      silent: true
-  #    - cmd: echo "⚠️  This may hang if zinit prompts for input..."
-  #      silent: true
-  #    - /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" {{.QUIET}}
+  #    - cd /tmp && /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
   #    - cmd: echo "✅ Zsh plugins installed"
   #      silent: true
+
+  zsh:install:plugins:
+    desc: "Install Zsh plugins with zinit (interactive)"
+    cmds:
+      - cmd: echo "📦 Installing Zsh plugins..."
+        silent: true
+      - cmd: echo "⚠️  This may hang if zinit prompts for input..."
+        silent: true
+      - /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" {{.QUIET}}
+      - cmd: echo "✅ Zsh plugins installed"
+        silent: true
 
 # VS Code #########################################################################################
 
