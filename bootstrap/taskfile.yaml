@@ -406,6 +406,7 @@ tasks:
       - task: zsh:deploy:config
       - task: zsh:configure:zellij
       - task: zsh:configure:abbr
+      - task: zsh:configure:p10k
       # - task: zsh:install:plugins
 
   zsh:configure:histfile:
