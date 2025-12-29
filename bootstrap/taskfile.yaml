@@ -42,7 +42,7 @@ vars:
     # - opentofu
     - ripgrep
     - sops
-    - systemd
+    #- systemd
     # - velero
     - vim
     - wget
@@ -71,7 +71,7 @@ tasks:
       - task: git:main
       - task: zsh:main
       - task: vscode:main
-      - task: wsl:main
+      #- task: wsl:main
       - task: status
       - cmd: echo "✅ Bootstrap terminé !"
         silent: true
