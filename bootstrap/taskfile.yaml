@@ -407,7 +407,7 @@ tasks:
       - task: zsh:configure:zellij
       - task: zsh:configure:abbr
       - task: zsh:configure:p10k
-      - task: zsh:install:plugins
+      #- task: zsh:install:plugins
 
   zsh:configure:histfile:
     desc: "Créer le fichier d'historique Zsh"
@@ -482,15 +482,6 @@ tasks:
       - cp configs/.p10k.zsh ~/.p10k.zsh
       - cmd: echo "✅ .p10k.zsh déployé"
         silent: true
-
-  #zsh:install:plugins:
-  #  desc: "Installer les plugins Zsh avec zinit"
-  #  cmds:
-  #    - cmd: echo "📦 Installation des plugins Zsh..."
-  #      silent: true
-  #    - /home/linuxbrew/.linuxbrew/bin/zsh -c "source ~/.zshrc; exit" {{.QUIET}} &
-  #    - cmd: echo "✅ Plugins Zsh en cours d'installation (arrière-plan)"
-  #      silent: true
 
   zsh:install:plugins:
     desc: "Install Zsh plugins with zinit (interactive)"
