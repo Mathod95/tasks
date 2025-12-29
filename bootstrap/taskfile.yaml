@@ -514,19 +514,6 @@ tasks:
     status:
       - test -L /usr/local/bin/code
 
-  #vscode:install:server:
-  #  desc: "Installer VS Code Server dans WSL"
-  #  env:
-  #    PATH: /home/linuxbrew/.linuxbrew/bin:{{.PATH}}
-  #  cmds:
-  #    - cmd: echo "📦 Installation de VS Code Server..."
-  #      silent: true
-  #    - /usr/local/bin/code --version {{.QUIET}}
-  #    - cmd: echo "✅ VS Code Server installé"
-  #      silent: true
-  #  status:
-  #    - test -d ~/.vscode-server
-
   vscode:install:server:
     desc: "Installer VS Code Server dans WSL"
     vars:
