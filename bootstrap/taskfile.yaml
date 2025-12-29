@@ -400,6 +400,8 @@ tasks:
       - task: zsh:configure:add-shells
       - task: zsh:configure:default-shell
       - task: zsh:deploy:config
+      - task: zsh:configure:zellij
+      - task: zsh:configure:abbr
       # - task: zsh:install:plugins
 
   zsh:configure:histfile:
@@ -442,6 +444,26 @@ tasks:
     cmds:
       - cp configs/.zshrc ~/.zshrc
       - cmd: echo "✅ .zshrc déployé"
+        silent: true
+
+  zsh:configure:zellij:
+    desc: "Zellij"
+    preconditions:
+      - sh: test -f configs/config.kdl
+        msg: "❌ Fichier configs/config.kdl introuvable."
+    cmds:
+      - cp configs/config.kdl ~/.config/zellij/config.kdl
+      - cmd: echo "✅ config.kdl déployé"
+        silent: true
+
+  zsh:configure:abbr:
+    desc: "Abbbr"
+    preconditions:
+      - sh: test -f configs/user-abbreviations
+        msg: "❌ Fichier configs/config.kdl introuvable."
+    cmds:
+      - cp configs/user-abbreviations ~/.config/zsh-abbr/user-abbreviations
+      - cmd: echo "✅ config.kdl déployé"
         silent: true
 
   zsh:install:plugins:
