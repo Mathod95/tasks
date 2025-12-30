@@ -8,17 +8,14 @@ vars:
   REPOSITORY_URL: "git@github.com:{{ .GITHUB_USER }}/{{ .REPOSITORY_NAME }}.git"
   BRANCH_NAME: "main"
 
-###
-
+###################################################################################################
+# Gh have to be installed and authenticated before running this Taskfile
+###################################################################################################
 tasks:
   default:
     desc: "Initialize project, create GitHub repo, and push code."
     summary: "Setup project and GitHub repo."
     aliases: [setup, init]
-    output:
-      group:
-        begin: '🚀 ═══════════════════════════════════════════════════════════════'
-        end: '✅ ═══════════════════════════════════════════════════════════════'
     cmds:
       - task: github:main
 
