@@ -27,6 +27,7 @@ vars:
     - git
     - gh
     - helm
+    - iproute2
     - k9s
     # - keychain
     - kind
