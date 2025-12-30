@@ -25,6 +25,7 @@ vars:
     - fd
     - fzf
     - git
+    - gh
     - helm
     - k9s
     # - keychain
@@ -473,6 +474,7 @@ tasks:
       - cmd: echo "✅ user-abbreviations déployé"
         silent: true
 
+  # Deploy a file empty to avoid p10k prompting on first zsh start
   zsh:configure:p10k:
     desc: "p10k"
     preconditions:
@@ -482,15 +484,6 @@ tasks:
       - cp configs/.p10k.zsh ~/.p10k.zsh
       - cmd: echo "✅ .p10k.zsh déployé"
         silent: true
-
-  #zsh:install:plugins:
-  #  desc: "Install Zsh plugins with zinit (silent)"
-  #  cmds:
-  #    - cmd: echo "📦 Installing Zsh plugins..."
-  #      silent: true
-  #    - cd /tmp && /home/linuxbrew/.linuxbrew/bin/zsh -i -c "exit" >/dev/null 2>&1 || true
-  #    - cmd: echo "✅ Zsh plugins installed"
-  #      silent: true
 
   zsh:install:plugins:
     desc: "Install Zsh plugins with zinit (interactive)"
