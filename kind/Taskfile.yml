@@ -1,0 +1,94 @@
+version: '3'
+
+set: [errexit, pipefail]
+
+###################################################################################################
+
+tasks:
+  default:
+    desc: Create a local Kubernetes cluster using KinD
+    summary: Create a local Kubernetes cluster using KinD
+    aliases: [setup, init]
+    cmds:
+      - task: kind:main
+      - task: argocd:main
+
+###################################################################################################
+
+  kind:main:
+    desc: Create a local Kubernetes cluster using KinD
+    summary: Create a local Kubernetes cluster using KinD
+    cmds:
+      - task: kind:create:production
+      - task: kind:create:staging
+      - task: kind:create:management
+  
+  kind:create:production:
+    desc: Create the production cluster
+    summary: Create the production cluster
+    cmds:
+      - kind create cluster --name production --config config/kind-production.yaml
+  
+  kind:create:staging:
+    desc: Create the staging cluster
+    summary: Create the staging cluster
+    cmds:
+      - kind create cluster --name staging --config config/kind-staging.yaml
+
+  kind:create:management:
+    desc: Create the management cluster
+    summary: Create the management cluster
+    cmds:
+      - kind create cluster --name management --config config/kind-management.yaml
+
+  kind:clean:
+    desc: Delete all KinD clusters
+    summary: Delete all KinD clusters
+    cmds:
+      - kind delete cluster --name management
+      - kind delete cluster --name production
+      - kind delete cluster --name staging
+
+###################################################################################################
+
+  argocd:main:
+    desc: Install ArgoCD on the management cluster
+    summary: Install ArgoCD on the management cluster
+    cmds:
+      - task: argocd:install
+      - task: argocd:get:password
+      - task: argocd:port:forward
+
+  argocd:install:
+    desc: Install ArgoCD on the management cluster
+    summary: Install ArgoCD on the management cluster
+    cmds:
+      - kubectl --context kind-management create namespace argocd
+      - kubectl --context kind-management apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml
+  
+  argocd:get:password:
+    desc: Get the initial ArgoCD admin password
+    summary: Get the initial ArgoCD admin password
+    cmds:
+      - kubectl --context kind-management -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+
+  argocd:port:forward:
+    desc: Start ArgoCD port-forward in background
+    cmds:
+      - sh -c 'kubectl --context kind-management -n argocd port-forward svc/argocd-server 8080:443 > /dev/null 2>&1 &'
+      - cmd: echo "✅ ArgoCD accessible at http://localhost:8080"
+        silent: true
+    status:
+      - pgrep -f "kubectl.*port-forward.*argocd-server" > /dev/null
+
+  argocd:port:forward:stop:
+    desc: Stop ArgoCD port-forward
+    cmds:
+      - pkill -f "kubectl.*port-forward.*argocd-server" || true
+      - cmd: echo "✅ Port-forward stopped"
+        silent: true
+
+# STATUS ##########################################################################################
+
+# STATUS ##########################################################################################
+
