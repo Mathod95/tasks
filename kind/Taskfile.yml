@@ -10,10 +10,21 @@ tasks:
     summary: Create a local Kubernetes cluster using KinD
     aliases: [setup, init]
     cmds:
+      - task: requirements
       - task: kind:main
       - task: argocd:main
+      - task: status
 
-###################################################################################################
+# REQUIREMENTS ####################################################################################
+
+  requirements:
+    desc: Check required tools
+    cmds:
+      - echo "Requirements:"
+      - command -v kind >/dev/null 2>&1 && echo "✅ Kind" || (echo "  ❌ Kind" && exit 1)
+      - command -v kubectl >/dev/null 2>&1 && echo "✅ Kubectl" || (echo "  ❌ Kubectl" && exit 1)
+
+# KIND ############################################################################################
 
   kind:main:
     desc: Create a local Kubernetes cluster using KinD
@@ -28,56 +39,102 @@ tasks:
     summary: Create the production cluster
     cmds:
       - kind create cluster --name production --config config/kind-production.yaml
+    status:
+      - kind get clusters | grep -q "^production$"
   
   kind:create:staging:
     desc: Create the staging cluster
     summary: Create the staging cluster
     cmds:
       - kind create cluster --name staging --config config/kind-staging.yaml
+    status:
+      - kind get clusters | grep -q "^staging$"
 
   kind:create:management:
     desc: Create the management cluster
     summary: Create the management cluster
     cmds:
       - kind create cluster --name management --config config/kind-management.yaml
+    status:
+      - kind get clusters | grep -q "^management$"
 
-  kind:clean:
+  kind:verify:
+    desc: Verify all clusters are running
+    silent: true
+    cmds:
+      - |
+        echo "🔍 Verifying clusters..."
+        for cluster in management production staging; do
+          if kubectl --context kind-$cluster get nodes > /dev/null 2>&1; then
+            echo "  ✅ $cluster cluster is ready"
+          else
+            echo "  ❌ $cluster cluster is not ready"
+            exit 1
+          fi
+        done
+
+  clean:
     desc: Delete all KinD clusters
     summary: Delete all KinD clusters
     cmds:
-      - kind delete cluster --name management
-      - kind delete cluster --name production
-      - kind delete cluster --name staging
+      - kind delete cluster --name management || true
+      - kind delete cluster --name production || true
+      - kind delete cluster --name staging || true
 
-###################################################################################################
+# ARGOCD ##########################################################################################
 
   argocd:main:
     desc: Install ArgoCD on the management cluster
     summary: Install ArgoCD on the management cluster
     cmds:
       - task: argocd:install
+      - task: argocd:wait
       - task: argocd:get:password
+      - task: argocd:cluster:add:all
       - task: argocd:port:forward
 
   argocd:install:
-    desc: Install ArgoCD on the management cluster
-    summary: Install ArgoCD on the management cluster
+    desc: Deploy ArgoCD in HA mode on management cluster
+    summary: |
+      Creates the 'argocd' namespace and deploys ArgoCD in High Availability mode
+      on the management cluster using the official HA manifests.
+      
+      Status checks:
+      - Skips if 'argocd' namespace already exists
+      - Skips if 'argocd-server' deployment is already present
     cmds:
-      - kubectl --context kind-management create namespace argocd
+      - kubectl --context kind-management create namespace argocd --dry-run=client -o yaml | kubectl --context kind-management apply -f -
       - kubectl --context kind-management apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml
-  
+    status:
+      - kubectl --context kind-management get namespace argocd > /dev/null 2>&1
+      - kubectl --context kind-management get deployment -n argocd argocd-server > /dev/null 2>&1
+
+  argocd:wait:
+    desc: Wait for ArgoCD to be ready
+    cmds:
+      - |
+        echo "⏳ Waiting for ArgoCD to be ready..."
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-server
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-repo-server
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-applicationset-controller
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-notifications-controller
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-redis-ha-haproxy
+        kubectl --context kind-management -n argocd wait --for=condition=available --timeout=300s deployment/argocd-dex-server
+        echo "✅ ArgoCD is ready!"
+
   argocd:get:password:
     desc: Get the initial ArgoCD admin password
     summary: Get the initial ArgoCD admin password
+    silent: true
     cmds:
-      - kubectl --context kind-management -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+      - 'echo "🔑 Password: $(kubectl --context kind-management -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)"'
 
   argocd:port:forward:
     desc: Start ArgoCD port-forward in background
     cmds:
       - sh -c 'kubectl --context kind-management -n argocd port-forward svc/argocd-server 8080:443 > /dev/null 2>&1 &'
       - cmd: echo "✅ ArgoCD accessible at http://localhost:8080"
-        silent: true
+        #silent: true
     status:
       - pgrep -f "kubectl.*port-forward.*argocd-server" > /dev/null
 
@@ -88,7 +145,216 @@ tasks:
       - cmd: echo "✅ Port-forward stopped"
         silent: true
 
-# STATUS ##########################################################################################
+  #argocd:show:info:
+  #  desc: Show ArgoCD access information
+  #  cmds:
+  #    - echo "📌 URL: http://localhost:8080"
+  #    - echo "👤 Username: admin"
+  #    - echo "🔑 Password: $(kubectl --context kind-management -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
+
+  argocd:logs:
+    desc: Show ArgoCD server logs
+    cmds:
+      - kubectl --context kind-management -n argocd logs -l app.kubernetes.io/name=argocd-server --tail=50 -f
+
+# ARGOCD CLUSTER ##################################################################################
+
+  argocd:cluster:add:all:
+    desc: Register production and staging clusters in ArgoCD
+    cmds:
+      - task: argocd:cluster:add:production
+      - task: argocd:cluster:add:staging
+      - task: argocd:cluster:list
+
+  argocd:cluster:add:production:
+    desc: Add production cluster to ArgoCD
+    cmds:
+      - |
+        echo "📝 Adding production cluster to ArgoCD..."
+        
+        # Create service account
+        kubectl --context kind-production create serviceaccount argocd-manager -n kube-system --dry-run=client -o yaml | kubectl --context kind-production apply -f -
+        kubectl --context kind-production create clusterrolebinding argocd-manager \
+          --clusterrole=cluster-admin \
+          --serviceaccount=kube-system:argocd-manager \
+          --dry-run=client -o yaml | kubectl --context kind-production apply -f -
+        
+        # Create token
+        kubectl --context kind-production apply -f - <<EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: argocd-manager-token
+          namespace: kube-system
+          annotations:
+            kubernetes.io/service-account.name: argocd-manager
+        type: kubernetes.io/service-account-token
+        EOF
+        
+        sleep 3
+        
+        # Get token and create cluster secret
+        TOKEN=$(kubectl --context kind-production get secret argocd-manager-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
+        CA_DATA=$(kubectl --context kind-production config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+        
+        kubectl --context kind-management apply -f - <<EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: production-cluster
+          namespace: argocd
+          labels:
+            argocd.argoproj.io/secret-type: cluster
+        type: Opaque
+        stringData:
+          name: production
+          server: https://production-control-plane:6443
+          config: |
+            {
+              "bearerToken": "$TOKEN",
+              "tlsClientConfig": {
+                "insecure": false,
+                "caData": "$CA_DATA"
+              }
+            }
+        EOF
+        
+        echo "✅ Production cluster added"
+    status:
+      - kubectl --context kind-management get secret production-cluster -n argocd > /dev/null 2>&1
+
+  argocd:cluster:add:staging:
+    desc: Add staging cluster to ArgoCD
+    cmds:
+      - |
+        echo "📝 Adding staging cluster to ArgoCD..."
+        
+        # Create service account
+        kubectl --context kind-staging create serviceaccount argocd-manager -n kube-system --dry-run=client -o yaml | kubectl --context kind-staging apply -f -
+        kubectl --context kind-staging create clusterrolebinding argocd-manager \
+          --clusterrole=cluster-admin \
+          --serviceaccount=kube-system:argocd-manager \
+          --dry-run=client -o yaml | kubectl --context kind-staging apply -f -
+        
+        # Create token
+        kubectl --context kind-staging apply -f - <<EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: argocd-manager-token
+          namespace: kube-system
+          annotations:
+            kubernetes.io/service-account.name: argocd-manager
+        type: kubernetes.io/service-account-token
+        EOF
+        
+        sleep 3
+        
+        # Get token and create cluster secret
+        TOKEN=$(kubectl --context kind-staging get secret argocd-manager-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
+        CA_DATA=$(kubectl --context kind-staging config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+        
+        kubectl --context kind-management apply -f - <<EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: staging-cluster
+          namespace: argocd
+          labels:
+            argocd.argoproj.io/secret-type: cluster
+        type: Opaque
+        stringData:
+          name: staging
+          server: https://staging-control-plane:6443
+          config: |
+            {
+              "bearerToken": "$TOKEN",
+              "tlsClientConfig": {
+                "insecure": false,
+                "caData": "$CA_DATA"
+              }
+            }
+        EOF
+        
+        echo "✅ Staging cluster added"
+    status:
+      - kubectl --context kind-management get secret staging-cluster -n argocd > /dev/null 2>&1
+
+  argocd:cluster:list:
+    desc: List clusters registered in ArgoCD
+    cmds:
+      - |
+        echo "📋 Registered clusters in ArgoCD:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        kubectl --context kind-management get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster -o json | \
+          jq -r '.items[] | "  • \(.data.name | @base64d) → \(.data.server | @base64d)"'
+
+  argocd:cluster:verify:
+    desc: Verify ArgoCD can connect to all clusters
+    cmds:
+      - |
+        echo "🔍 Verifying cluster connectivity..."
+        argocd cluster list --grpc-web
 
 # STATUS ##########################################################################################
 
+  status:
+    desc: Show overall status
+    cmds:
+      - echo "🐋 Cluster Status:"
+      - echo "━━━━━━━━━━━━━━━━━━━━"
+      - kind get clusters
+      - echo ""
+      - echo "🐙 ArgoCD Status:"
+      - echo "━━━━━━━━━━━━━━━━━━━━"
+      - 'echo "📌 link: http://localhost:8080"'
+      - 'echo "👤 user: admin"'
+      - kubectl --context kind-management -n argocd get deploy --no-headers | wc -l | xargs -I {} echo "{} ArgoCD deployments"
+      - pgrep -f "kubectl.*port-forward.*argocd-server" > /dev/null && echo "✅ Port-forward active" || echo "⚠️  Port-forward not active"
+
+  status2:
+    desc: Show cluster and ArgoCD status
+    cmds:
+      - |
+        echo "📊 ArgoCD Clusters:"
+        argocd cluster list 2>/dev/null || echo "Run: argocd login --core"
+        echo ""
+        echo "📋 ArgoCD Projects:"
+        argocd proj list 2>/dev/null || true
+        echo ""
+        echo "🎮 Management Nodes:"
+        kubectl --context kind-management get nodes
+  
+  status3:
+    desc: Show status of all clusters
+    cmds:
+      - |
+        echo "Cluster Status:"
+        echo "==============="
+        for cluster in {{.CLUSTERS}}; do
+          echo -n "  $cluster: "
+          if kind get clusters | grep -q "^$cluster$"; then
+            echo "✓ Running"
+            echo -n "    Nodes: "
+            kubectl --context kind-$cluster get nodes --no-headers | wc -l
+          else
+            echo "✗ Not found"
+          fi
+        done
+        echo ""
+        echo "ArgoCD Status:"
+        echo "==============="
+        if kubectl --context kind-management get ns argocd &>/dev/null; then
+          echo "  ✓ ArgoCD installed"
+          echo "    Registered clusters:"
+          kubectl --context kind-management get secrets -n argocd -l argocd.argoproj.io/secret-type=cluster -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | sed 's/^/      - /'
+        else
+          echo "  ✗ ArgoCD not installed"
+        fi
+
+# HELP ############################################################################################
+
+  help:
+    desc: Show all available commands
+    cmds:
+      - task --list-all
