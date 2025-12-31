@@ -13,10 +13,10 @@ vars:
         name: argo
         url: https://argoproj.github.io/argo-helm
         app: argo-cd
-      crossplane:
-        name: crossplane-stable
-        url: https://charts.crossplane.io/stable
-        app: crossplane
+      #crossplane:
+      #  name: crossplane-stable
+      #  url: https://charts.crossplane.io/stable
+      #  app: crossplane
       stakater:
         name: stakater
         url: https://stakater.github.io/stakater-charts

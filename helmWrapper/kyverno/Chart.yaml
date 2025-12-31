@@ -1,0 +1,14 @@
+apiVersion: v2
+name: kyverno-wrapper
+description: Wrapper for kyverno kyverno
+type: application
+version: 1.0.0
+appVersion: "v1.16.1"
+maintainers:
+  - name: Mathod
+dependencies:
+  - name: kyverno
+    version: 3.6.1
+    repository: https://kyverno.github.io/kyverno/
+sources:
+  - https://github.com/kyverno/kyverno

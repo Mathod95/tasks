@@ -1,0 +1,14 @@
+apiVersion: v2
+name: reloader-wrapper
+description: Wrapper for stakater reloader
+type: application
+version: 1.0.0
+appVersion: "v1.4.12"
+maintainers:
+  - name: Mathod
+dependencies:
+  - name: reloader
+    version: 2.2.7
+    repository: https://stakater.github.io/stakater-charts
+sources:
+  - https://github.com/stakater/Reloader
