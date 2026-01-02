@@ -5,6 +5,13 @@
 #helmWrapper/prometheus
 #helmWrapper/reloader
 
+# helmWrapper2
+helmWrapper2/argo-cd
+helmWrapper2/crossplane
+helmWrapper2/kyverno
+helmWrapper2/prometheus
+helmWrapper2/reloader
+
 # bootstrap
 bootstrap/secrets/*.yaml
 bootstrap/secrets/*.txt
