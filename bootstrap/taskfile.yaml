@@ -26,6 +26,7 @@ vars:
     - fzf
     - git
     - gh
+    - glab
     - go-task
     - helm
     - iproute2
@@ -44,6 +45,7 @@ vars:
     # - neovim
     # - opentofu
     - ripgrep
+    - sd
     - sops
     #- systemd
     # - velero
