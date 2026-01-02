@@ -1,0 +1,241 @@
+version: '3'
+
+set: [errexit, pipefail]
+
+# VARIABLES ########################################################################################
+
+vars:
+  # APPLICATION
+  APP_NAME: '{{.APP_NAME}}'
+  # GITLAB
+  GITLAB_GROUP_ID: 120554361
+  VISIBILITY: '{{.VISIBILITY | default "public"}}'
+  # CHARTS
+  CHARTS:
+    map:
+      kyverno:
+        name: kyverno
+        url: https://kyverno.github.io/kyverno/
+        app: kyverno
+      #argo:
+      #  name: argo
+      #  url: https://argoproj.github.io/argo-helm
+      #  app: argo-cd
+      #crossplane:
+      #  name: crossplane-stable
+      #  url: https://charts.crossplane.io/stable
+      #  app: crossplane
+      #stakater:
+      #  name: stakater
+      #  url: https://stakater.github.io/stakater-charts
+      #  app: reloader
+      #prometheus:
+      #  name: prometheus-community
+      #  url: https://prometheus-community.github.io/helm-charts
+      #  app: prometheus
+      #knative:
+      #  name: knative-operator
+      #  url: https://knative.github.io/operator
+      #  app: knative-operator
+
+# INCLUDES #########################################################################################
+
+includes:
+
+# MAIN #############################################################################################
+
+tasks:
+  default:
+    desc: ""
+    summary: ""
+    aliases: [setup, init]
+    cmds:
+      - task: helmWrapper:main
+  
+  helmWrapper:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: required:main
+      #- task: helm:main
+      - task: directory:main
+      - task: values:main
+
+# REQUIRED CHECK ###################################################################################
+
+  required:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: required:packages
+      - task: required:gitlab:auth
+
+  required:packages:
+    desc: ""
+    summary: ""
+    internal: true
+    silent: true
+    cmds:
+      - echo "required:packages"
+      - command -v helm >/dev/null 2>&1 && echo "✅ helm" || { echo "❌ helm could not be found. Please install helm."; exit 1; }
+      - command -v yq   >/dev/null 2>&1 && echo "✅ yq"   || { echo "❌ yq could not be found. Please install yq."; exit 1; }
+      - command -v glab >/dev/null 2>&1 && echo "✅ glab" || { echo "❌ glab could not be found. Please install git."; exit 1; }
+      - echo ""
+
+  required:gitlab:auth:
+    desc: ""
+    summary: ""
+    internal: true
+    silent: true
+    cmds:
+      - echo "required:gitlab:auth"
+      - glab auth status >/dev/null 2>&1 && echo "✅ glab authenticated" || { echo "❌ glab is not authenticated. Please authenticate with 'glab auth login'."; exit 1; }
+      - echo ""
+
+# HELM #############################################################################################
+
+  helm:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: helm:repositories:add
+      - task: helm:repositories:update
+
+  helm:repositories:add:all:
+    desc: "Add all Helm repositories"
+    summary: "Iterates through CHARTS map and adds each repository to Helm, skipping if already exists"
+    internal: true
+    cmds:
+      - |
+        {{range $key, $chart := .CHARTS}}
+        echo "➕ Adding repository: {{$chart.name}}"
+        helm repo add "{{$chart.name}}" "{{$chart.url}}" 2>/dev/null || echo "ℹ️  Repository {{$chart.name}} already exists"
+        {{end}}
+        echo "✅ All repositories added"
+
+  helm:repositories:update:
+    desc: "Update all Helm repositories"
+    summary: "Refreshes the local cache of all added Helm repositories to fetch latest chart versions"
+    internal: true
+    cmds:
+      - helm repo update
+      - cmd: echo "✅ Repositories updated"
+        silent: true
+
+# DIRECTORY ########################################################################################
+
+  directory:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: directory:copy:template
+      - task: directory:rename:charts
+      - task: directory:rename:applicationSet
+
+  directory:copy:template:
+    desc: "Copy the template to the new directory"
+    summary: "Copies the template into the new application directory."
+    internal: true
+    requires:
+      vars: [APP_NAME]
+    preconditions:
+      - sh: test ! -d "{{.APP_NAME}}"
+        msg: "Directory {{.APP_NAME}} already exists, skipping template copy."
+    cmds:
+      - echo "directory:copy:template"
+      - cp -r template {{.APP_NAME}}
+      - echo "✅Template copied"
+      - echo ""
+
+  directory:rename:charts:
+    desc: "Rename charts directory"
+    summary: "Renames the charts folder inside the new directory."
+    internal: true
+    requires:
+      vars: [APP_NAME]
+    cmds:
+      - echo "directory:rename:charts"
+      - mv {{.APP_NAME}}/charts/APP_NAME {{.APP_NAME}}/charts/{{.APP_NAME}}
+      - echo "✅ Charts directory renamed"
+      - echo ""
+
+  directory:rename:applicationSet:
+    desc: "Rename application set YAML file"
+    summary: "Renames the application set YAML file inside the apps folder."
+    internal: true
+    requires:
+      vars: [APP_NAME]
+    cmds:
+      - echo "directory:rename:applicationSet"
+      - mv {{.APP_NAME}}/apps/APP_NAME-applicationSet.yaml {{.APP_NAME}}/apps/{{.APP_NAME}}-applicationSet.yaml
+      - echo "✅ applicationSet manifest renamed"
+      - echo ""
+
+# APPLICATIONSET ###################################################################################
+
+# CHART ############################################################################################
+
+# VALUES ###########################################################################################
+
+  values:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: values:fetch:default
+      - task: values:update:placeholders
+
+  values:fetch:default:
+    desc: "Fetch official values.yaml for the specified chart and append to values.yaml.example"
+    summary: "Downloads the default values for a chart and appends them to values.yaml.example"
+    cmds:
+      - echo "values:fetch:chart"
+      - helm show values "{{.CHARTS.kyverno.name}}/{{.CHARTS.kyverno.app}}" >> "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" 2>/dev/null
+      - echo "✅ Values fetch completed!"
+
+  values:update:placeholders:
+  desc: "Update values.example with correct placeholders"
+  summary: "Update the values.example file by replacing placeholders with actual values"
+  cmds:
+    - rg -r "CHART_URL" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.url}}" -l
+    - rg -r "CHART_REPO" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.name}}" -l
+    - rg -r "CHART_NAME" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.name}}" -l
+    - rg -r "GENERATED_DATE" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "$(date '+%Y-%m-%d %H:%M:%S')" -l
+
+# GITLAB ###########################################################################################
+
+  gitlab:create:repository:
+    desc: ""
+    summary: ""
+    requires:
+      vars: [APP_NAME]
+    env:
+      PATH: ./{{.APP_NAME}}
+    cmds:
+      - glab repo create {{.APP_NAME}} --group {{.GITLAB_GROUP_ID}} --{{.VISIBILITY}}
+      #- git init
+      #- git add .
+      #- git commit -m "Initial commit"
+      #- git remote add origin git@gitlab.com:mathod-io/infrastructure/services/{{.APP_NAME}}.git
+      #- git push -u origin main
+
+# STANDALONE #######################################################################################
+
+  #clean:
+  #  desc: "Clean up generated files and directories"
+  #  summary: "Removes the generated application directory."
+  #  requires:
+  #    vars: [APP_NAME]
+  #  cmds:
+  #    - echo "clean"
+  #    - rm -rf {{.APP_NAME}}
+  #    - echo "✅ Removed directory {{.APP_NAME}}"
+
+  clean:
+    desc: "Clean up generated files and directories"
+    summary: "Removes the generated application directory."
+    cmds:
+      - echo "clean"
+      - rm -rf kyverno
+      - echo "✅ Removed directory kyverno"
+
+# HELP #############################################################################################

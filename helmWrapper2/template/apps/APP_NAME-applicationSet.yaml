@@ -1,0 +1,77 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: APP_NAME
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  generators:
+  - list:
+      elements:
+      - server: https://production-control-plane:6443
+        environment: production
+      - server: https://staging-control-plane:6443
+        environment: staging
+
+  template:
+    metadata:
+      name: 'crossplane-{{.environment}}' # ! change this accordingly
+      namespace: argocd
+      labels:
+        app: crossplane # ! change this accordingly
+        environment: '{{.environment}}'
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: '.;..'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+
+    spec:
+      project: default
+
+      source:
+        repoURL: https://gitlab.com/mathod-io/infrastructure/services/argocd.git
+        targetRevision: main
+        path: charts/crossplane # ! change this accordingly
+
+        helm:
+          releaseName: crossplane # ! change this accordingly
+
+          valueFiles:
+            - values.yaml                               # Valeurs communes
+            - environments/{{.environment}}/values.yaml # Valeurs spécifiques à l'environnement
+          skipCrds: false
+
+      destination:
+        server: '{{.server}}'
+        namespace: crossplane-system # ! change this accordingly
+
+      syncPolicy:
+        automated:
+          prune: true       # Permet de supprimer les ressources qui ne sont plus dans le repo
+          selfHeal: true    # Permet à Argo CD de réconcilier automatiquement l'état
+          allowEmpty: false # Ne permet pas la synchronisation si aucune ressource
+
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+        #- RespectIgnoreDifferences=true
+
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      revisionHistoryLimit: 3
+
+      ignoreDifferences:
+      - group: pkg.crossplane.io
+        kind: Provider
+        jsonPointers:
+        - /status
+      - group: aws.upbound.io
+        kind: ProviderConfig
+        jsonPointers:
+        - /status
