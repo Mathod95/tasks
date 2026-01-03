@@ -11,6 +11,7 @@ helmWrapper2/crossplane
 helmWrapper2/kyverno
 helmWrapper2/prometheus
 helmWrapper2/reloader
+helmWrapper2/knative-operator
 
 # bootstrap
 bootstrap/secrets/*.yaml

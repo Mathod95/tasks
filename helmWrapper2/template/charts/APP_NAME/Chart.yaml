@@ -1,0 +1,16 @@
+apiVersion: v2 
+name: APP_NAME-wrapper 
+description: Wrapper for Stakater APP_NAME
+type: application 
+version: 1.0.0 
+appVersion: "APP_VERSION" 
+maintainers: 
+  - name: Mathod
+    email: mathod@mathod.io
+
+dependencies:
+  - name: reloader 
+    version: CHART_VERSION
+    repository: https://stakater.github.io/stakater-charts 
+
+home: https://github.com/stakater/Reloader 

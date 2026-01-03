@@ -186,7 +186,46 @@ tasks:
 
 # APPLICATIONSET ###################################################################################
 
+  applicationSet:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: applicationSet:update:placeholders
+
+  applicationSet:update:placeholders:
+    desc: ""
+    cmds:
+      - echo "applicationSet:update:placeholders"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        sd "APP_NAME" "{{$chart.app}}" "{{$chart.app}}/apps/{{$chart.app}}-applicationSet.yaml"
+        echo "✅ {{$chart.app}} applicationSet updated"
+        {{end}}
+      - echo "✅ All applicationSet placeholders updated!"
+      - echo ""
+
 # CHART ############################################################################################
+
+  chart:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: chart:update:placeholders
+
+  chart:update:placeholders:
+    desc: ""
+    cmds:
+      - echo "chart:update:placeholders"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        sd "APP_NAME" "{{$chart.app}}" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "APP_VERSION" "$(helm search repo {{$chart.name}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 1 | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "CHART_VERSION" "$(helm search repo {{$chart.name}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 
+      - echo ""1 | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        echo "✅ {{$chart.app}} Chart.yaml updated"
+        {{end}}
+      - echo "✅ All Chart.yaml placeholders updated!"
+      - echo ""
 
 # VALUES ###########################################################################################
 
@@ -218,6 +257,12 @@ tasks:
 
 # GITLAB ###########################################################################################
 
+  gitlab:main:
+    desc: ""
+    summary: ""
+    cmds:
+      - task: gitlab:create:repository
+  
   gitlab:create:repository:
     desc: ""
     summary: ""

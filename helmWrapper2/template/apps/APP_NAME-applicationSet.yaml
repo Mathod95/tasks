@@ -17,10 +17,10 @@ spec:
 
   template:
     metadata:
-      name: 'crossplane-{{.environment}}' # ! change this accordingly
+      name: 'APP_NAME-{{.environment}}'
       namespace: argocd
       labels:
-        app: crossplane # ! change this accordingly
+        app: APP_NAME
         environment: '{{.environment}}'
       annotations:
         argocd.argoproj.io/manifest-generate-paths: '.;..'
@@ -31,16 +31,16 @@ spec:
       project: default
 
       source:
-        repoURL: https://gitlab.com/mathod-io/infrastructure/services/argocd.git
+        repoURL: https://gitlab.com/mathod-io/infrastructure/services/argocd.git # ! change this accordingly
         targetRevision: main
-        path: charts/crossplane # ! change this accordingly
+        path: charts/APP_NAME   # ! change this accordingly
 
         helm:
-          releaseName: crossplane # ! change this accordingly
+          releaseName: APP_NAME # ! change this accordingly
 
           valueFiles:
-            - values.yaml                               # Valeurs communes
-            - environments/{{.environment}}/values.yaml # Valeurs spécifiques à l'environnement
+            - values.yaml
+            - environments/{{.environment}}/values.yaml
           skipCrds: false
 
       destination:
