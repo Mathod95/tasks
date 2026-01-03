@@ -17,26 +17,26 @@ vars:
         name: kyverno
         url: https://kyverno.github.io/kyverno/
         app: kyverno
-      #argo:
-      #  name: argo
-      #  url: https://argoproj.github.io/argo-helm
-      #  app: argo-cd
-      #crossplane:
-      #  name: crossplane-stable
-      #  url: https://charts.crossplane.io/stable
-      #  app: crossplane
-      #stakater:
-      #  name: stakater
-      #  url: https://stakater.github.io/stakater-charts
-      #  app: reloader
-      #prometheus:
-      #  name: prometheus-community
-      #  url: https://prometheus-community.github.io/helm-charts
-      #  app: prometheus
-      #knative:
-      #  name: knative-operator
-      #  url: https://knative.github.io/operator
-      #  app: knative-operator
+      argo:
+        name: argo
+        url: https://argoproj.github.io/argo-helm
+        app: argo-cd
+      crossplane:
+        name: crossplane-stable
+        url: https://charts.crossplane.io/stable
+        app: crossplane
+      stakater:
+        name: stakater
+        url: https://stakater.github.io/stakater-charts
+        app: reloader
+      prometheus:
+        name: prometheus-community
+        url: https://prometheus-community.github.io/helm-charts
+        app: prometheus
+      knative:
+        name: knative-operator
+        url: https://knative.github.io/operator
+        app: knative-operator
 
 # INCLUDES #########################################################################################
 
@@ -56,8 +56,9 @@ tasks:
     desc: ""
     summary: ""
     cmds:
+      - echo ""
       - task: required:main
-      #- task: helm:main
+      - task: helm:main
       - task: directory:main
       - task: values:main
 
@@ -80,6 +81,7 @@ tasks:
       - command -v helm >/dev/null 2>&1 && echo "✅ helm" || { echo "❌ helm could not be found. Please install helm."; exit 1; }
       - command -v yq   >/dev/null 2>&1 && echo "✅ yq"   || { echo "❌ yq could not be found. Please install yq."; exit 1; }
       - command -v glab >/dev/null 2>&1 && echo "✅ glab" || { echo "❌ glab could not be found. Please install git."; exit 1; }
+      - command -v sd   >/dev/null 2>&1 && echo "✅ sd"   || { echo "❌ sd could not be found. Please install sd."; exit 1; }
       - echo ""
 
   required:gitlab:auth:
@@ -98,29 +100,36 @@ tasks:
     desc: ""
     summary: ""
     cmds:
-      - task: helm:repositories:add
-      - task: helm:repositories:update
+      - task: helm:add:repositories
+      - task: helm:update:repositories
 
-  helm:repositories:add:all:
+  helm:add:repositories:
     desc: "Add all Helm repositories"
-    summary: "Iterates through CHARTS map and adds each repository to Helm, skipping if already exists"
     internal: true
     cmds:
+      - echo "helm:add:repositories"
       - |
         {{range $key, $chart := .CHARTS}}
-        echo "➕ Adding repository: {{$chart.name}}"
-        helm repo add "{{$chart.name}}" "{{$chart.url}}" 2>/dev/null || echo "ℹ️  Repository {{$chart.name}} already exists"
+        if helm repo list | grep -q "^{{$chart.name}}\s"; then
+          echo "⏭️  {{$chart.name}} already configured"
+        else
+          helm repo add "{{$chart.name}}" "{{$chart.url}}" >/dev/null 2>&1 && \
+            echo "✅ {{$chart.name}} added" || \
+            echo "❌ {{$chart.name}} failed"
+        fi
         {{end}}
-        echo "✅ All repositories added"
+      - echo "✅ All repositories ready"
+      - echo ""
 
-  helm:repositories:update:
+  helm:update:repositories:
     desc: "Update all Helm repositories"
     summary: "Refreshes the local cache of all added Helm repositories to fetch latest chart versions"
     internal: true
     cmds:
+      - echo "helm:update:repositories"
       - helm repo update
-      - cmd: echo "✅ Repositories updated"
-        silent: true
+      - echo "✅ Repositories updated"
+      - echo ""
 
 # DIRECTORY ########################################################################################
 
@@ -132,43 +141,47 @@ tasks:
       - task: directory:rename:charts
       - task: directory:rename:applicationSet
 
-  directory:copy:template:
-    desc: "Copy the template to the new directory"
-    summary: "Copies the template into the new application directory."
-    internal: true
-    requires:
-      vars: [APP_NAME]
-    preconditions:
-      - sh: test ! -d "{{.APP_NAME}}"
-        msg: "Directory {{.APP_NAME}} already exists, skipping template copy."
+  directory:copy:template: # OK
+    desc: "Copy the template to all directories"
+    summary: "Copies the template into all application directories"
     cmds:
       - echo "directory:copy:template"
-      - cp -r template {{.APP_NAME}}
-      - echo "✅Template copied"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        cp -r template {{$chart.app}}
+        echo "✅ {{$chart.app}} copied"
+        {{end}}
       - echo ""
 
-  directory:rename:charts:
-    desc: "Rename charts directory"
-    summary: "Renames the charts folder inside the new directory."
+  directory:rename:charts: # OK
+    desc: "Rename charts directories"
+    summary: "Renames the charts folder inside each application directory."
     internal: true
-    requires:
-      vars: [APP_NAME]
     cmds:
       - echo "directory:rename:charts"
-      - mv {{.APP_NAME}}/charts/APP_NAME {{.APP_NAME}}/charts/{{.APP_NAME}}
-      - echo "✅ Charts directory renamed"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        mv {{$chart.app}}/charts/APP_NAME {{$chart.app}}/charts/{{$chart.app}} 2>/dev/null && \
+          echo "✅ {{$chart.app}} renamed" || \
+          echo "⏭️  {{$chart.app}} skipped"
+        {{end}}
       - echo ""
 
-  directory:rename:applicationSet:
-    desc: "Rename application set YAML file"
-    summary: "Renames the application set YAML file inside the apps folder."
+  directory:rename:applicationSet: # OK
+    desc: "Rename application set YAML files"
+    summary: "Renames the application set YAML files inside the apps folders"
     internal: true
-    requires:
-      vars: [APP_NAME]
     cmds:
       - echo "directory:rename:applicationSet"
-      - mv {{.APP_NAME}}/apps/APP_NAME-applicationSet.yaml {{.APP_NAME}}/apps/{{.APP_NAME}}-applicationSet.yaml
-      - echo "✅ applicationSet manifest renamed"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -f "{{$chart.app}}/apps/APP_NAME-applicationSet.yaml" ]; then
+          mv "{{$chart.app}}/apps/APP_NAME-applicationSet.yaml" "{{$chart.app}}/apps/{{$chart.app}}-applicationSet.yaml"
+          echo "✅ {{$chart.app}} applicationSet renamed"
+        else
+          echo "⏭️  {{$chart.app}}/apps/APP_NAME-applicationSet.yaml not found"
+        fi
+        {{end}}
       - echo ""
 
 # APPLICATIONSET ###################################################################################
@@ -193,13 +206,15 @@ tasks:
       - echo "✅ Values fetch completed!"
 
   values:update:placeholders:
-  desc: "Update values.example with correct placeholders"
-  summary: "Update the values.example file by replacing placeholders with actual values"
-  cmds:
-    - rg -r "CHART_URL" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.url}}" -l
-    - rg -r "CHART_REPO" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.name}}" -l
-    - rg -r "CHART_NAME" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "{{.CHARTS.kyverno.name}}" -l
-    - rg -r "GENERATED_DATE" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" -e "$(date '+%Y-%m-%d %H:%M:%S')" -l
+    desc: "Update values.example with correct placeholders"
+    cmds:
+      - echo "Updating placeholders..."
+      - sd "CHART_URL" "{{.CHARTS.kyverno.url}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
+      - sd "CHART_REPO" "{{.CHARTS.kyverno.name}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
+      - sd "CHART_NAME" "{{.CHARTS.kyverno.app}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
+      - sd "CHART_APP_NAME" "{{.CHARTS.kyverno.app}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
+      - sd "GENERATED_DATE" "$(date '+%Y-%m-%d %H:%M:%S')" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
+      - echo "✅ Done!"
 
 # GITLAB ###########################################################################################
 
@@ -212,6 +227,13 @@ tasks:
       PATH: ./{{.APP_NAME}}
     cmds:
       - glab repo create {{.APP_NAME}} --group {{.GITLAB_GROUP_ID}} --{{.VISIBILITY}}
+
+
+
+
+
+
+
       #- git init
       #- git add .
       #- git commit -m "Initial commit"
@@ -220,22 +242,17 @@ tasks:
 
 # STANDALONE #######################################################################################
 
-  #clean:
-  #  desc: "Clean up generated files and directories"
-  #  summary: "Removes the generated application directory."
-  #  requires:
-  #    vars: [APP_NAME]
-  #  cmds:
-  #    - echo "clean"
-  #    - rm -rf {{.APP_NAME}}
-  #    - echo "✅ Removed directory {{.APP_NAME}}"
-
   clean:
-    desc: "Clean up generated files and directories"
-    summary: "Removes the generated application directory."
+    desc: "Remove all generated chart wrapper directories"
+    summary: "Deletes all chart directories created by the wrapper process, based on the CHARTS map configuration"
     cmds:
-      - echo "clean"
-      - rm -rf kyverno
-      - echo "✅ Removed directory kyverno"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -d "{{$chart.app}}" ]; then
+          echo "🗑️  Removing {{$chart.app}}/"
+          rm -rf "{{$chart.app}}"
+        fi
+        {{end}}
+        echo "✅ Cleanup completed!"
 
 # HELP #############################################################################################
