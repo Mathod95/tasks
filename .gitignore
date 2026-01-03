@@ -1,15 +1,8 @@
 # helmWrapper
-#helmWrapper/argo-cd
-#helmWrapper/crossplane
-#helmWrapper/kyverno
-#helmWrapper/prometheus
-#helmWrapper/reloader
-
-# helmWrapper2
-helmWrapper2/*
-!helmWrapper2/templates/
-!helmWrapper2/taskfile.yaml
-!helmWrapper2/README.md
+helmWrapper/*
+!helmWrapper/templates/
+!helmWrapper/taskfile.yaml
+!helmWrapper/README.md
 
 # bootstrap
 bootstrap/secrets/*.yaml
