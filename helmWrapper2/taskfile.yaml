@@ -5,8 +5,6 @@ set: [errexit, pipefail]
 # VARIABLES ########################################################################################
 
 vars:
-  # APPLICATION
-  APP_NAME: '{{.APP_NAME}}'
   # GITLAB
   GITLAB_GROUP_ID: 120554361
   VISIBILITY: '{{.VISIBILITY | default "public"}}'
@@ -14,29 +12,41 @@ vars:
   CHARTS:
     map:
       kyverno:
-        name: kyverno
+        repoName: kyverno
         url: https://kyverno.github.io/kyverno/
         app: kyverno
-      argo:
-        name: argo
-        url: https://argoproj.github.io/argo-helm
-        app: argo-cd
-      crossplane:
-        name: crossplane-stable
-        url: https://charts.crossplane.io/stable
-        app: crossplane
-      stakater:
-        name: stakater
-        url: https://stakater.github.io/stakater-charts
-        app: reloader
-      prometheus:
-        name: prometheus-community
-        url: https://prometheus-community.github.io/helm-charts
-        app: prometheus
-      knative:
-        name: knative-operator
-        url: https://knative.github.io/operator
-        app: knative-operator
+      #argo-cd:
+      #  repoName: argo
+      #  url: https://argoproj.github.io/argo-helm
+      #  app: argo-cd
+      #argo-workflows:
+      #  repoName: argo
+      #  url: https://argoproj.github.io/argo-helm
+      #  app: argo-workflows
+      #argo-rollouts:
+      #  repoName: argo
+      #  url: https://argoproj.github.io/argo-helm
+      #  app: argo-rollouts
+      #argo-events:
+      #  repoName: argo
+      #  url: https://argoproj.github.io/argo-helm
+      #  app: argo-events
+      #crossplane:
+      #  repoName: crossplane-stable
+      #  url: https://charts.crossplane.io/stable
+      #  app: crossplane
+      #stakater:
+      #  repoName: stakater
+      #  url: https://stakater.github.io/stakater-charts
+      #  app: reloader
+      #prometheus:
+      #  repoName: prometheus-community
+      #  url: https://prometheus-community.github.io/helm-charts
+      #  app: prometheus
+      #knative:
+      #  repoName: knative-operator
+      #  url: https://knative.github.io/operator
+      #  app: knative-operator
 
 # INCLUDES #########################################################################################
 
@@ -60,6 +70,8 @@ tasks:
       - task: required:main
       - task: helm:main
       - task: directory:main
+      - task: applicationSet:main
+      - task: chart:main
       - task: values:main
 
 # REQUIRED CHECK ###################################################################################
@@ -100,8 +112,8 @@ tasks:
     desc: ""
     summary: ""
     cmds:
-      - task: helm:add:repositories
-      - task: helm:update:repositories
+      - task: helm:add:repositories    # OK
+      - task: helm:update:repositories # OK
 
   helm:add:repositories:
     desc: "Add all Helm repositories"
@@ -110,12 +122,12 @@ tasks:
       - echo "helm:add:repositories"
       - |
         {{range $key, $chart := .CHARTS}}
-        if helm repo list | grep -q "^{{$chart.name}}\s"; then
-          echo "⏭️  {{$chart.name}} already configured"
+        if helm repo list | grep -q "^{{$chart.repoName}}\s"; then
+          echo "⏭️  {{$chart.repoName}} already configured"
         else
-          helm repo add "{{$chart.name}}" "{{$chart.url}}" >/dev/null 2>&1 && \
-            echo "✅ {{$chart.name}} added" || \
-            echo "❌ {{$chart.name}} failed"
+          helm repo add "{{$chart.repoName}}" "{{$chart.url}}" >/dev/null 2>&1 && \
+            echo "✅ {{$chart.repoName}} added" || \
+            echo "❌ {{$chart.repoName}} failed"
         fi
         {{end}}
       - echo "✅ All repositories ready"
@@ -137,11 +149,11 @@ tasks:
     desc: ""
     summary: ""
     cmds:
-      - task: directory:copy:template
-      - task: directory:rename:charts
-      - task: directory:rename:applicationSet
+      - task: directory:copy:template         # OK
+      - task: directory:rename:charts         # OK
+      - task: directory:rename:applicationSet # OK
 
-  directory:copy:template: # OK
+  directory:copy:template:
     desc: "Copy the template to all directories"
     summary: "Copies the template into all application directories"
     cmds:
@@ -153,7 +165,7 @@ tasks:
         {{end}}
       - echo ""
 
-  directory:rename:charts: # OK
+  directory:rename:charts:
     desc: "Rename charts directories"
     summary: "Renames the charts folder inside each application directory."
     internal: true
@@ -167,7 +179,7 @@ tasks:
         {{end}}
       - echo ""
 
-  directory:rename:applicationSet: # OK
+  directory:rename:applicationSet:
     desc: "Rename application set YAML files"
     summary: "Renames the application set YAML files inside the apps folders"
     internal: true
@@ -210,7 +222,7 @@ tasks:
     desc: ""
     summary: ""
     cmds:
-      - task: chart:update:placeholders
+      - task: chart:update:placeholders # OK
 
   chart:update:placeholders:
     desc: ""
@@ -219,9 +231,10 @@ tasks:
       - |
         {{range $key, $chart := .CHARTS}}
         sd "APP_NAME" "{{$chart.app}}" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
-        sd "APP_VERSION" "$(helm search repo {{$chart.name}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 1 | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
-        sd "CHART_VERSION" "$(helm search repo {{$chart.name}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 
-      - echo ""1 | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "APP_VERSION" "$(helm search repo {{$chart.repoName}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 1 | awk '{print $3}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "CHART_VERSION" "$(helm search repo {{$chart.repoName}}/{{$chart.app}} --versions --devel | head -n 2 | tail -n 1 | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "REPO_NAME" "$(helm repo list | grep "^{{$chart.repoName}}" | awk '{print $1}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
+        sd "REPO_URL" "$(helm repo list | grep "^{{$chart.repoName}}" | awk '{print $2}')" "{{$chart.app}}/charts/{{$chart.app}}/Chart.yaml"
         echo "✅ {{$chart.app}} Chart.yaml updated"
         {{end}}
       - echo "✅ All Chart.yaml placeholders updated!"
@@ -237,59 +250,70 @@ tasks:
       - task: values:update:placeholders
 
   values:fetch:default:
-    desc: "Fetch official values.yaml for the specified chart and append to values.yaml.example"
-    summary: "Downloads the default values for a chart and appends them to values.yaml.example"
+    desc: "Fetch official values.yaml for all charts and save to values.yaml.default"
+    summary: "Downloads the default values for each chart and saves them to values.yaml.default"
     cmds:
-      - echo "values:fetch:chart"
-      - helm show values "{{.CHARTS.kyverno.name}}/{{.CHARTS.kyverno.app}}" >> "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default" 2>/dev/null
-      - echo "✅ Values fetch completed!"
+      - echo "values:fetch:default"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        helm show values "{{$chart.repoName}}/{{$chart.app}}" >> "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default" 2>/dev/null && \
+          echo "✅ {{$chart.app}} values fetched" || \
+          echo "❌ {{$chart.app}} values fetch failed"
+        {{end}}
+      - echo "✅ All values fetched!"
+      - echo ""
 
   values:update:placeholders:
-    desc: "Update values.example with correct placeholders"
+    desc: "Update values.default with correct placeholders for all charts"
+    summary: "Updates placeholders in values.yaml.default files for each chart"
     cmds:
-      - echo "Updating placeholders..."
-      - sd "CHART_URL" "{{.CHARTS.kyverno.url}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
-      - sd "CHART_REPO" "{{.CHARTS.kyverno.name}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
-      - sd "CHART_NAME" "{{.CHARTS.kyverno.app}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
-      - sd "CHART_APP_NAME" "{{.CHARTS.kyverno.app}}" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
-      - sd "GENERATED_DATE" "$(date '+%Y-%m-%d %H:%M:%S')" "{{.CHARTS.kyverno.app}}/charts/{{.CHARTS.kyverno.app}}/values.yaml.default"
-      - echo "✅ Done!"
+      - echo "values:update:placeholders"
+      - |
+        {{range $key, $chart := .CHARTS}}
+        if [ -f "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default" ]; then
+          sd "CHART_URL" "{{$chart.url}}" "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default"
+          sd "CHART_REPO" "{{$chart.repoName}}" "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default"
+          sd "CHART_NAME" "{{$chart.app}}" "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default"
+          sd "CHART_APP_NAME" "{{$chart.app}}" "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default"
+          sd "GENERATED_DATE" "$(date '+%Y-%m-%d %H:%M:%S')" "{{$chart.app}}/charts/{{$chart.app}}/values.yaml.default"
+          echo "✅ {{$chart.app}} placeholders updated"
+        else
+          echo "⏭️  {{$chart.app}}/charts/{{$chart.app}}/values.yaml.default not found"
+        fi
+        {{end}}
+      - echo "✅ All values placeholders updated!"
+      - echo ""
 
 # GITLAB ###########################################################################################
-
-  gitlab:main:
-    desc: ""
-    summary: ""
-    cmds:
-      - task: gitlab:create:repository
-  
-  gitlab:create:repository:
-    desc: ""
-    summary: ""
-    requires:
-      vars: [APP_NAME]
-    env:
-      PATH: ./{{.APP_NAME}}
-    cmds:
-      - glab repo create {{.APP_NAME}} --group {{.GITLAB_GROUP_ID}} --{{.VISIBILITY}}
-
-
-
-
-
-
-
-      #- git init
-      #- git add .
-      #- git commit -m "Initial commit"
-      #- git remote add origin git@gitlab.com:mathod-io/infrastructure/services/{{.APP_NAME}}.git
-      #- git push -u origin main
-
+#
+#  gitlab:main:
+#    desc: ""
+#    summary: ""
+#    cmds:
+#      - task: gitlab:create:repository
+#  
+#  gitlab:create:repository:
+#    desc: ""
+#    summary: ""
+#    requires:
+#      vars: [APP_NAME]
+#    env:
+#      PATH: ./{{.APP_NAME}}
+#    cmds:
+#      - glab repo create {{.APP_NAME}} --group {{.GITLAB_GROUP_ID}} --{{.VISIBILITY}}
+#
+#      #- git init
+#      #- git add .
+#      #- git commit -m "Initial commit"
+#      #- git remote add origin git@gitlab.com:mathod-io/infrastructure/services/{{.APP_NAME}}.git
+#      #- git push -u origin main
+#
 # STANDALONE #######################################################################################
 
   clean:
     desc: "Remove all generated chart wrapper directories"
     summary: "Deletes all chart directories created by the wrapper process, based on the CHARTS map configuration"
+    silent: true
     cmds:
       - |
         {{range $key, $chart := .CHARTS}}
