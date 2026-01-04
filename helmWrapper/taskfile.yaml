@@ -92,6 +92,11 @@ vars:
         url: https://charts.karpenter.sh/
         app: karpenter
         namespace: karpenter
+      podinfo:
+        repoName: podinfo
+        url: https://stefanprodan.github.io/podinfo
+        app: podinfo
+        namespace: podinfo
       #kiali
       #loki
       #n8n
