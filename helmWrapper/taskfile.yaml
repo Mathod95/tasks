@@ -15,51 +15,83 @@ vars:
         repoName: kyverno
         url: https://kyverno.github.io/kyverno/
         app: kyverno
+        namespace: kyverno
       argo-cd:
         repoName: argo
         url: https://argoproj.github.io/argo-helm
         app: argo-cd
+        namespace: argocd
       argo-workflows:
         repoName: argo
         url: https://argoproj.github.io/argo-helm
         app: argo-workflows
+        namespace: argo
       argo-rollouts:
         repoName: argo
         url: https://argoproj.github.io/argo-helm
         app: argo-rollouts
+        namespace: argo-rollouts
       argo-events:
         repoName: argo
         url: https://argoproj.github.io/argo-helm
         app: argo-events
+        namespace: argo-events
       crossplane:
         repoName: crossplane-stable
         url: https://charts.crossplane.io/stable
         app: crossplane
+        namespace: crossplane-system
       stakater:
         repoName: stakater
         url: https://stakater.github.io/stakater-charts
         app: reloader
+        namespace: reloader
       prometheus:
         repoName: prometheus-community
         url: https://prometheus-community.github.io/helm-charts
         app: prometheus
+        namespace: monitoring
       knative:
         repoName: knative-operator
         url: https://knative.github.io/operator
         app: knative-operator
-      #istio-operator:
-      #komiser:
-      #teleport:
-      #external-snapshotter:
-      #grafana-operator:
-      #cert-manager:
-      #  repoName: cert-manager
-      #  url: https://charts.jetstack.io
-      #  app: cert-manager
-      #clickhouse
-      #coder
-      #keda
-      #karpenter
+        namespace:
+      istio-operator:
+        repoName: istio
+        url: https://istio-release.storage.googleapis.com/charts
+        app: istio # TO CHECK
+        namespace: istio-system
+      opencost:
+        repoName: opencost
+        url: https://opencost.github.io/opencost-helm-chart
+        app: opencost
+        namespace: cost-analyzer
+      teleport:
+        repoName: teleport
+        url: https://charts.releases.teleport.dev
+        app: teleport
+        namespace: teleport
+      
+      grafana-operator:
+        repoName: grafana
+        url: https://grafana.github.io/helm-charts
+        app: grafana-operator
+        namespace: monitoring
+      cert-manager:
+        repoName: cert-manager
+        url: https://charts.jetstack.io
+        app: cert-manager
+        namespace: cert-manager
+      keda:
+        repoName: kedacore
+        url: https://kedacore.github.io/charts
+        app: keda
+        namespace: keda
+      karpenter:
+        repoName: karpenter
+        url: https://charts.karpenter.sh/
+        app: karpenter
+        namespace: karpenter
       #kiali
       #loki
       #n8n
@@ -70,6 +102,10 @@ vars:
       #kuik
       #twingate
       #velero
+      #komiser: # DEAD ?
+      #clickhouse
+      #coder
+      #external-snapshotter:
 
 # INCLUDES #########################################################################################
 
